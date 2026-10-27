@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 from arq import Retry
+from redis.asyncio import Redis
 from sqlalchemy import select
 
 from app.config import get_settings
@@ -19,6 +20,7 @@ from app.services.ai_quota import (
     AIQuotaExceededError,
     acquire_ai_slot,
     quota_error_from_response,
+    quota_scope,
     record_quota_exhausted,
     seconds_until_daily_reset,
 )
@@ -27,6 +29,7 @@ from app.services.recommendation_service import AIRecommendationError, Recommend
 from app.services.weather_service import WeatherData
 from app.workers import tagging
 
+URL = "https://ai.test/v1"
 REQUEST = httpx.Request("POST", "http://ai.test/v1/chat/completions")
 
 
@@ -78,26 +81,26 @@ def _limits(**overrides):
 
 class TestQuotaErrorFromResponse:
     def test_gemini_daily_quota(self):
-        error = quota_error_from_response(_gemini_429(DAILY, "71752s"), "gemini-x")
+        error = quota_error_from_response(_gemini_429(DAILY, "71752s"), "gemini-x", URL)
         assert error.daily and error.retry_after_seconds == 71752
         assert "daily" in str(error) and "20 h" in str(error)
 
     def test_gemini_per_minute_quota(self):
-        error = quota_error_from_response(_gemini_429(PER_MINUTE, "17.4s"), "gemini-x")
+        error = quota_error_from_response(_gemini_429(PER_MINUTE, "17.4s"), "gemini-x", URL)
         assert not error.daily and error.retry_after_seconds == 17
         assert "per minute" in str(error)
 
     def test_retry_after_header_without_details(self):
         response = httpx.Response(429, headers={"Retry-After": "12"}, text="slow", request=REQUEST)
-        error = quota_error_from_response(response, "m")
+        error = quota_error_from_response(response, "m", URL)
         assert not error.daily and error.retry_after_seconds == 12
 
     def test_a_long_delay_counts_as_daily(self):
         response = httpx.Response(429, headers={"Retry-After": "7200"}, request=REQUEST)
-        assert quota_error_from_response(response, "m").daily
+        assert quota_error_from_response(response, "m", URL).daily
 
     def test_other_statuses_are_not_quota_errors(self):
-        assert quota_error_from_response(httpx.Response(500, request=REQUEST), "m") is None
+        assert quota_error_from_response(httpx.Response(500, request=REQUEST), "m", URL) is None
 
 
 def test_daily_reset_is_midnight_pacific():
@@ -114,10 +117,10 @@ class TestAcquireSlot:
             patch.object(ai_quota, "get_settings", return_value=settings),
             patch.object(ai_quota.time, "time", return_value=1_800_000_010.0),
         ):
-            await acquire_ai_slot(model)
-            await acquire_ai_slot(model)
+            await acquire_ai_slot(model, URL)
+            await acquire_ai_slot(model, URL)
             with pytest.raises(AIQuotaExceededError) as exc:
-                await acquire_ai_slot(model)
+                await acquire_ai_slot(model, URL)
         assert not exc.value.daily and exc.value.retry_after_seconds == 50
 
     async def test_per_minute_budget_waits_for_the_next_minute(self):
@@ -130,8 +133,8 @@ class TestAcquireSlot:
             patch.object(ai_quota.time, "time", side_effect=[start, start, start + 21]),
             patch.object(ai_quota.asyncio, "sleep", sleep),
         ):
-            await acquire_ai_slot(model)
-            await acquire_ai_slot(model)
+            await acquire_ai_slot(model, URL)
+            await acquire_ai_slot(model, URL)
         assert sleep.await_count == 1
         assert 20 <= sleep.await_args.args[0] <= 21
 
@@ -139,27 +142,55 @@ class TestAcquireSlot:
         model = f"m-{uuid4()}"
         settings = _limits(ai_requests_per_day=1)
         with patch.object(ai_quota, "get_settings", return_value=settings):
-            await acquire_ai_slot(model)
+            await acquire_ai_slot(model, URL)
             with pytest.raises(AIQuotaExceededError) as exc:
-                await acquire_ai_slot(model)
+                await acquire_ai_slot(model, URL)
         assert exc.value.daily and exc.value.retry_after_seconds > 0
 
     async def test_a_recorded_daily_refusal_blocks_without_limits(self):
         model = f"m-{uuid4()}"
         with patch.object(ai_quota, "get_settings", return_value=_limits()):
-            await acquire_ai_slot(model)
+            await acquire_ai_slot(model, URL)
             await record_quota_exhausted(
-                AIQuotaExceededError(model, daily=True, retry_after_seconds=600)
+                AIQuotaExceededError(
+                    model, daily=True, retry_after_seconds=600, scope=quota_scope(URL, model)
+                )
             )
             with pytest.raises(AIQuotaExceededError) as exc:
-                await acquire_ai_slot(model)
+                await acquire_ai_slot(model, URL)
         assert exc.value.daily and 590 <= exc.value.retry_after_seconds <= 600
+
+    async def test_a_block_from_another_endpoint_leaves_the_default_alone(self):
+        # A user-configured endpoint answering with a forged daily 429 for the system's model
+        # name must not block the built-in endpoint.
+        model = f"m-{uuid4()}"
+        forged = quota_error_from_response(
+            _gemini_429(DAILY, "999999999s"), model, "https://evil.test/v1"
+        )
+        with patch.object(ai_quota, "get_settings", return_value=_limits()):
+            await record_quota_exhausted(forged)
+            await acquire_ai_slot(model, URL)
+            with pytest.raises(AIQuotaExceededError):
+                await acquire_ai_slot(model, "https://evil.test/v1/")
+
+    async def test_provider_delays_are_capped_at_one_day(self):
+        model = f"m-{uuid4()}"
+        error = quota_error_from_response(_gemini_429(DAILY, "999999999s"), model, URL)
+        assert error.retry_after_seconds == ai_quota.MAX_RETRY_AFTER_S
+        with patch.object(ai_quota, "get_settings", return_value=_limits()):
+            await record_quota_exhausted(error)
+            redis = Redis.from_url(get_settings().redis_url)
+            try:
+                ttl = await redis.ttl(f"ai_quota:{quota_scope(URL, model)}:blocked")
+            finally:
+                await redis.aclose()
+        assert 0 < ttl <= ai_quota.MAX_RETRY_AFTER_S
 
     async def test_redis_down_does_not_block_requests(self):
         settings = _limits(redis_url="redis://127.0.0.1:1/0", ai_requests_per_day=1)
         with patch.object(ai_quota, "get_settings", return_value=settings):
-            await acquire_ai_slot("m")
-            await acquire_ai_slot("m")
+            await acquire_ai_slot("m", URL)
+            await acquire_ai_slot("m", URL)
 
 
 @pytest.mark.asyncio

@@ -495,7 +495,7 @@ class AIService:
                 while attempt < self.settings.ai_max_retries:
                     retry_wait = None
                     try:
-                        await acquire_ai_slot(model)
+                        await acquire_ai_slot(model, endpoint.url)
                         request_body = {
                             "model": model,
                             "messages": messages,
@@ -597,7 +597,7 @@ class AIService:
                             )
                             use_reasoning_effort = False
                             continue
-                        quota = quota_error_from_response(e.response, model)
+                        quota = quota_error_from_response(e.response, model, endpoint.url)
                         if quota is not None:
                             last_error = quota
                             logger.warning(f"{endpoint.name}: {quota}")
@@ -807,7 +807,7 @@ class AIService:
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
                 for attempt in range(self.settings.ai_max_retries):
                     try:
-                        await acquire_ai_slot(endpoint.text_model)
+                        await acquire_ai_slot(endpoint.text_model, endpoint.url)
                         request_body = {
                             "model": endpoint.text_model,
                             "messages": messages,
@@ -893,7 +893,9 @@ class AIService:
                             )
                             use_reasoning_effort = False
                             continue
-                        quota = quota_error_from_response(e.response, endpoint.text_model)
+                        quota = quota_error_from_response(
+                            e.response, endpoint.text_model, endpoint.url
+                        )
                         if quota is not None:
                             last_error = quota
                             logger.warning(f"{endpoint.name}: {quota}")

@@ -1,6 +1,8 @@
 """Request budgets for hosted AI providers with tight quotas (Gemini's free tier).
 
-Two parts, both keyed by model because Gemini counts quota per project per model:
+Two parts, keyed by endpoint URL + model (Gemini counts quota per project per model, and the
+API key is shared by every endpoint), so a 429 from a user-configured endpoint can only ever
+block that endpoint, never the built-in one:
 - quota_error_from_response reads a provider's 429 (Gemini's QuotaFailure / RetryInfo
   details, or a Retry-After header) and says whether it is a per-minute or a daily limit.
 - acquire_ai_slot runs before every request: it fails fast while a daily quota is known
@@ -12,6 +14,7 @@ never blocks a request: limiting is skipped and logged.
 """
 
 import asyncio
+import hashlib
 import logging
 import re
 import time
@@ -28,6 +31,9 @@ logger = logging.getLogger(__name__)
 KEY_PREFIX = "ai_quota"
 # A retry delay this long can only be a daily (or longer) window, whatever the provider calls it.
 DAILY_RETRY_THRESHOLD_S = 3600
+# Upper bound on any provider-supplied delay, so a hostile or buggy endpoint cannot block a
+# scope (or defer a job) for longer than one quota day.
+MAX_RETRY_AFTER_S = 86400
 _DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?)s\s*$")
 
 
@@ -46,8 +52,16 @@ class AIQuotaExceededError(RuntimeError):
     "AI service is not available".
     """
 
-    def __init__(self, model: str, *, daily: bool, retry_after_seconds: int | None):
+    def __init__(
+        self,
+        model: str,
+        *,
+        daily: bool,
+        retry_after_seconds: int | None,
+        scope: str | None = None,
+    ):
         self.model = model
+        self.scope = scope
         self.daily = daily
         self.retry_after_seconds = retry_after_seconds
         wait = (
@@ -70,7 +84,14 @@ def _parse_duration(value: object) -> int | None:
     return None
 
 
-def quota_error_from_response(response: httpx.Response, model: str) -> AIQuotaExceededError | None:
+def quota_scope(url: str, model: str) -> str:
+    """Redis key part for one endpoint's model; hashed so no client string reaches the key."""
+    return hashlib.sha256(f"{url.rstrip('/')}|{model}".encode()).hexdigest()[:24]
+
+
+def quota_error_from_response(
+    response: httpx.Response, model: str, url: str
+) -> AIQuotaExceededError | None:
     if response.status_code != 429:
         return None
 
@@ -100,9 +121,13 @@ def quota_error_from_response(response: httpx.Response, model: str) -> AIQuotaEx
                 if "PerDay" in quota_id:
                     daily = True
 
-    if retry_after is not None and retry_after >= DAILY_RETRY_THRESHOLD_S:
-        daily = True
-    return AIQuotaExceededError(model, daily=daily, retry_after_seconds=retry_after)
+    if retry_after is not None:
+        retry_after = min(retry_after, MAX_RETRY_AFTER_S)
+        if retry_after >= DAILY_RETRY_THRESHOLD_S:
+            daily = True
+    return AIQuotaExceededError(
+        model, daily=daily, retry_after_seconds=retry_after, scope=quota_scope(url, model)
+    )
 
 
 def seconds_until_daily_reset(now: datetime | None = None) -> int:
@@ -116,38 +141,39 @@ def _day_stamp() -> str:
     return datetime.now(ZoneInfo(get_settings().ai_quota_reset_timezone)).strftime("%Y-%m-%d")
 
 
-def _block_key(model: str) -> str:
-    return f"{KEY_PREFIX}:{model}:blocked"
+def _block_key(scope: str) -> str:
+    return f"{KEY_PREFIX}:{scope}:blocked"
 
 
 async def record_quota_exhausted(error: AIQuotaExceededError) -> None:
     """Remember a provider's daily refusal so later requests fail without calling it."""
-    if not error.daily:
+    if not error.daily or not error.scope:
         return
-    ttl = error.retry_after_seconds or seconds_until_daily_reset()
+    ttl = min(error.retry_after_seconds or seconds_until_daily_reset(), MAX_RETRY_AFTER_S)
     redis = Redis.from_url(get_settings().redis_url)
     try:
-        await redis.set(_block_key(error.model), "1", ex=ttl)
+        await redis.set(_block_key(error.scope), "1", ex=ttl)
     except Exception as e:
         logger.warning(f"Could not record exhausted AI quota for {error.model}: {e}")
     finally:
         await redis.aclose()
 
 
-async def acquire_ai_slot(model: str) -> None:
-    """Wait for, or refuse, the next request to `model`. Raises AIQuotaExceededError."""
+async def acquire_ai_slot(model: str, url: str) -> None:
+    """Wait for, or refuse, the next request to `model` at `url`. Raises AIQuotaExceededError."""
     settings = get_settings()
+    scope = quota_scope(url, model)
     redis = Redis.from_url(settings.redis_url)
     try:
-        blocked = await redis.ttl(_block_key(model))
+        blocked = await redis.ttl(_block_key(scope))
         if blocked and blocked > 0:
-            raise AIQuotaExceededError(model, daily=True, retry_after_seconds=blocked)
+            raise AIQuotaExceededError(model, daily=True, retry_after_seconds=blocked, scope=scope)
 
         if settings.ai_requests_per_minute:
             waited = 0.0
             while True:
                 now = time.time()
-                key = f"{KEY_PREFIX}:{model}:minute:{int(now // 60)}"
+                key = f"{KEY_PREFIX}:{scope}:minute:{int(now // 60)}"
                 pipe = redis.pipeline()
                 pipe.incr(key)
                 pipe.expire(key, 120)
@@ -157,21 +183,21 @@ async def acquire_ai_slot(model: str) -> None:
                 wait = 60 - (now % 60) + 0.1
                 if waited + wait > settings.ai_rate_limit_max_wait_seconds:
                     raise AIQuotaExceededError(
-                        model, daily=False, retry_after_seconds=max(1, round(wait))
+                        model, daily=False, retry_after_seconds=max(1, round(wait)), scope=scope
                     )
                 logger.info(f"AI per-minute budget for {model} reached, waiting {wait:.1f}s")
                 await asyncio.sleep(wait)
                 waited += wait
 
         if settings.ai_requests_per_day:
-            key = f"{KEY_PREFIX}:{model}:day:{_day_stamp()}"
+            key = f"{KEY_PREFIX}:{scope}:day:{_day_stamp()}"
             pipe = redis.pipeline()
             pipe.incr(key)
             pipe.expire(key, 2 * 86400)
             count, _ = await pipe.execute()
             if count > settings.ai_requests_per_day:
                 raise AIQuotaExceededError(
-                    model, daily=True, retry_after_seconds=seconds_until_daily_reset()
+                    model, daily=True, retry_after_seconds=seconds_until_daily_reset(), scope=scope
                 )
     except AIQuotaExceededError:
         raise
