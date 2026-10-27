@@ -24,6 +24,7 @@ from app.models.outfit import (
 )
 from app.models.preference import UserPreference
 from app.models.user import User
+from app.services.ai_quota import AIQuotaExceededError
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
 from app.services.combo_scorer import (
     Combo,
@@ -1185,6 +1186,10 @@ class RecommendationService:
 
         except AIRecommendationError:
             raise
+        except AIQuotaExceededError as e:
+            # The quota message says when to try again, which the generic one below hides.
+            logger.error(f"AI recommendation failed: {e}")
+            raise AIRecommendationError(str(e)) from e
         except AIResponseTruncatedError as e:
             # Preserve the specific, actionable cause instead of the generic message
             # below — the AI endpoint responded successfully, it just didn't produce

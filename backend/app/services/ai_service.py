@@ -13,6 +13,12 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from app.config import get_settings
+from app.services.ai_quota import (
+    AIQuotaExceededError,
+    acquire_ai_slot,
+    quota_error_from_response,
+    record_quota_exhausted,
+)
 from app.utils.garment_vocabulary import (
     COLORS,
     FORMALITY,
@@ -461,6 +467,12 @@ class AIService:
         )
         return tags
 
+    def _quota_is_final(self, quota: "AIQuotaExceededError") -> bool:
+        # A daily quota, or a per-minute delay longer than we are willing to wait, is not
+        # worth retrying against the same endpoint; the next endpoint may still answer.
+        wait = quota.retry_after_seconds or 0
+        return quota.daily or wait > self.settings.ai_rate_limit_max_wait_seconds
+
     async def _call_with_fallback(
         self,
         messages: list,
@@ -474,14 +486,16 @@ class AIService:
         for endpoint in self._endpoints:
             logger.info(f"Trying AI endpoint for {task_name}: {endpoint.name}")
             model = endpoint.vision_model if use_vision_model else endpoint.text_model
-            use_logprobs = request_logprobs
+            use_logprobs = request_logprobs and self.settings.ai_logprobs_enabled
             use_reasoning_effort = bool(self.settings.ai_reasoning_effort)
             current_reasoning_effort = self.settings.ai_reasoning_effort
 
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
                 attempt = 0
                 while attempt < self.settings.ai_max_retries:
+                    retry_wait = None
                     try:
+                        await acquire_ai_slot(model)
                         request_body = {
                             "model": model,
                             "messages": messages,
@@ -555,6 +569,10 @@ class AIService:
                         if action == "next_endpoint":
                             break
 
+                    except AIQuotaExceededError as e:
+                        last_error = e
+                        logger.warning(f"{endpoint.name}: {e}")
+                        break
                     except _AIProviderResponseError as e:
                         last_error = e
                         logger.warning(f"Provider error from {endpoint.name}: {e}")
@@ -579,8 +597,17 @@ class AIService:
                             )
                             use_reasoning_effort = False
                             continue
-                        last_error = e
-                        logger.warning(f"HTTP error from {endpoint.name}: {e}")
+                        quota = quota_error_from_response(e.response, model)
+                        if quota is not None:
+                            last_error = quota
+                            logger.warning(f"{endpoint.name}: {quota}")
+                            if self._quota_is_final(quota):
+                                await record_quota_exhausted(quota)
+                                break
+                            retry_wait = quota.retry_after_seconds
+                        else:
+                            last_error = e
+                            logger.warning(f"HTTP error from {endpoint.name}: {e}")
                     except httpx.RequestError as e:
                         last_error = e
                         logger.warning(f"Request error from {endpoint.name}: {e}")
@@ -590,8 +617,10 @@ class AIService:
                         # Without this the retries fire back to back in milliseconds,
                         # so a rate-limited or restarting endpoint is hit three times
                         # in the same instant and the user's manual retry reproduces
-                        # the identical failure.
-                        await asyncio.sleep(min(2**attempt, AI_RETRY_MAX_BACKOFF_S))
+                        # the identical failure. A provider's own retry delay wins.
+                        await asyncio.sleep(
+                            max(min(2**attempt, AI_RETRY_MAX_BACKOFF_S), retry_wait or 0)
+                        )
 
             every_endpoint_repeats = every_endpoint_repeats and repeats_identically(last_error)
 
@@ -778,6 +807,7 @@ class AIService:
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
                 for attempt in range(self.settings.ai_max_retries):
                     try:
+                        await acquire_ai_slot(endpoint.text_model)
                         request_body = {
                             "model": endpoint.text_model,
                             "messages": messages,
@@ -847,6 +877,10 @@ class AIService:
                             )
                         return content
 
+                    except AIQuotaExceededError as e:
+                        last_error = e
+                        logger.warning(f"{endpoint.name}: {e}")
+                        break
                     except _AIProviderResponseError as e:
                         last_error = e
                         logger.warning(f"Provider error from {endpoint.name}: {e}")
@@ -859,6 +893,20 @@ class AIService:
                             )
                             use_reasoning_effort = False
                             continue
+                        quota = quota_error_from_response(e.response, endpoint.text_model)
+                        if quota is not None:
+                            last_error = quota
+                            logger.warning(f"{endpoint.name}: {quota}")
+                            if self._quota_is_final(quota):
+                                await record_quota_exhausted(quota)
+                                break
+                            if attempt < self.settings.ai_max_retries - 1:
+                                await asyncio.sleep(
+                                    quota.retry_after_seconds
+                                    or min(2**attempt, AI_RETRY_MAX_BACKOFF_S)
+                                )
+                                continue
+                            break
                         last_error = e
                         logger.warning(f"HTTP error from {endpoint.name}: {e}")
                         if attempt < self.settings.ai_max_retries - 1:

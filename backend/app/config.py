@@ -183,6 +183,19 @@ class Settings(BaseSettings):
     # does and keeps the combinations only as the fallback.
     suggestion_top_combos: int = Field(default=15, ge=0)
 
+    # Request logprobs for the tagging confidence. Gemini's OpenAI endpoint rejects them,
+    # which costs one wasted request per item before the retry without them.
+    ai_logprobs_enabled: bool = Field(default=True)
+    # Client-side request budget per model, shared by API and workers through Redis. Unset
+    # means no limit. The daily window resets at midnight in ai_quota_reset_timezone, which is
+    # when Gemini's free tier resets.
+    ai_requests_per_minute: int | None = Field(default=None, ge=1)
+    ai_requests_per_day: int | None = Field(default=None, ge=1)
+    ai_quota_reset_timezone: str = Field(default="America/Los_Angeles")
+    # Longest a request waits for a per-minute slot (ours or the provider's retry delay)
+    # before failing with a quota error instead.
+    ai_rate_limit_max_wait_seconds: int = Field(default=30, ge=0)
+
     @property
     def effective_ai_vision_enabled(self) -> bool:
         """Whether internal vision (auto-tagging) is active.

@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.models.item import TAG_COLUMNS, ClothingItem, ItemStatus, TaggedBy, TaggingStatus
 from app.models.preference import UserPreference
 from app.models.user import User
+from app.services.ai_quota import AIQuotaExceededError
 from app.services.ai_service import AIService, ClothingTags, repeats_identically
 from app.utils.locale import DEFAULT_LOCALE
 from app.workers.auto_background import queue_auto_background_removal
@@ -361,6 +362,14 @@ async def tag_item_image(ctx: dict, item_id: str, image_path: str) -> dict[str, 
     except Exception as e:
         error_msg = str(e)
         logger.exception(f"Error tagging item {item_id}: {error_msg}")
+        if isinstance(e, AIQuotaExceededError):
+            # A used-up daily quota fails the same way on every retry, so the item says why
+            # at once; a per-minute limit is retried after the provider's own delay.
+            if e.daily or _is_final_attempt(ctx):
+                await update_item_status_to_error(ctx, item_id, error_msg)
+                raise
+            await clear_ai_started_at(ctx, item_id)
+            raise Retry(defer=max(retry_delay_seconds(ctx), e.retry_after_seconds or 0)) from e
         # Returning normally here made max_tries dead: arq books a returned value
         # as success. arq only reschedules on Retry, so a plain re-raise would
         # surface the failure but still never retry.

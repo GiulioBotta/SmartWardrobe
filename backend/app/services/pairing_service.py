@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
+from app.services.ai_quota import AIQuotaExceededError
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
 from app.utils.clothing import covered_regions, deduplicate_by_body_slot
 from app.utils.garment_vocabulary import render_outfit_prompt
@@ -227,6 +228,9 @@ class PairingService:
             logger.info(f"AI pairings generated (model: {result.model})")
             logger.debug(f"AI raw response: {result.content[:500]}")
             pairings_data = self._parse_ai_response(result.content)
+        except AIQuotaExceededError as e:
+            logger.error(f"AI pairing generation failed: {e}")
+            raise AIGenerationError(str(e)) from e
         except AIResponseTruncatedError as e:
             # Preserve the specific, actionable cause: the endpoint responded
             # successfully but produced no content (see AIResponseTruncatedError).

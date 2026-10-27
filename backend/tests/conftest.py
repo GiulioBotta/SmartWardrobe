@@ -10,9 +10,15 @@ os.environ["STORAGE_PATH"] = "/tmp/wardrobe_test"
 os.environ.pop("OIDC_ISSUER_URL", None)
 os.environ.pop("OIDC_CLIENT_ID", None)
 os.environ.pop("OIDC_CLIENT_SECRET", None)
-# Fork switches: upstream tests expect upstream behaviour; fork tests turn them on explicitly.
+# Fork switches and local AI tuning: upstream tests expect the defaults; fork tests set
+# what they need explicitly.
 os.environ.pop("AUTO_REMOVE_BACKGROUND", None)
 os.environ.pop("SUGGESTION_COMBOS_ENABLED", None)
+os.environ.pop("AI_LOGPROBS_ENABLED", None)
+os.environ.pop("AI_REQUESTS_PER_MINUTE", None)
+os.environ.pop("AI_REQUESTS_PER_DAY", None)
+os.environ.pop("AI_RATE_LIMIT_MAX_WAIT_SECONDS", None)
+os.environ.pop("AI_REASONING_EFFORT", None)
 
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -134,7 +140,7 @@ async def _clear_rate_limits():
     settings = get_settings()
     try:
         redis = Redis.from_url(settings.redis_url)
-        keys = await redis.keys("rate_limit:*")
+        keys = await redis.keys("rate_limit:*") + await redis.keys("ai_quota:*")
         if keys:
             await redis.delete(*keys)
         await redis.aclose()
