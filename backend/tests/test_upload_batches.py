@@ -14,7 +14,7 @@ from sqlalchemy import select, update
 from app.api import upload_batches as batch_api
 from app.config import get_settings
 from app.models.embedding import ItemEmbedding
-from app.models.item import ClothingItem, ItemStatus
+from app.models.item import ClothingItem, ItemImage, ItemStatus
 from app.models.upload_batch import BatchStatus, PhotoStatus, UploadBatch, UploadPhoto
 from app.services.ai_quota import AIQuotaExceededError
 from app.services.ai_service import ClothingTags
@@ -404,3 +404,259 @@ async def test_photos_go_with_their_batch(db_session, test_user):
         select(UploadPhoto).where(UploadPhoto.batch_id == batch.id)
     )
     assert remaining.first() is None
+
+
+async def _garments(db_session, user, layout, *, tags=None):
+    """A sealed batch in review; layout is photos per garment, e.g. [2, 1]."""
+    batch, photos = await _batch(
+        db_session,
+        user,
+        sum(layout),
+        status=PhotoStatus.ready,
+        vectors=[_unit(1, i) for i in range(sum(layout))],
+    )
+    groups, index = [], 0
+    for size in layout:
+        group_id = uuid4()
+        members = photos[index : index + size]
+        for photo in members:
+            photo.group_id = group_id
+        members[0].is_primary = True
+        members[0].tags = dict(tags or {"type": "shirt", "primary_color": "white"})
+        groups.append(members)
+        index += size
+    batch.status = BatchStatus.review
+    await db_session.commit()
+    return batch, groups
+
+
+def _gid(members):
+    return str(members[0].group_id)
+
+
+class TestInboxActions:
+    @pytest.fixture(autouse=True)
+    def _no_redis(self):
+        with patch.object(batch_api, "_enqueue_tagging", new=AsyncMock()) as enqueue:
+            self.enqueue = enqueue
+            yield
+
+    def _url(self, batch, tail=""):
+        return f"/api/v1/upload-batches/{batch.id}{tail}"
+
+    async def test_confirm_makes_items_with_extra_photos_and_embedding(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (shirt, solo) = await _garments(
+            db_session,
+            test_user,
+            [2, 1],
+            tags={"type": "shirt", "primary_color": "white", "brand": "Uniqlo", "name": "Oxford"},
+        )
+        response = await client.post(
+            self._url(batch, "/confirm"), json={"group_ids": [_gid(shirt)]}, headers=auth_headers
+        )
+        assert response.status_code == 200
+        body = response.json()
+        (item_id,) = body["created_item_ids"]
+        assert [g["group_id"] for g in body["groups"]] == [_gid(solo)]
+        assert body["status"] == "review"
+
+        item = (
+            await db_session.execute(
+                select(ClothingItem)
+                .where(ClothingItem.id == item_id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one()
+        assert (item.type, item.primary_color, item.brand, item.name) == (
+            "shirt",
+            "white",
+            "Uniqlo",
+            "Oxford",
+        )
+        assert item.status == ItemStatus.ready
+        assert item.image_path == shirt[0].image_path
+        extra = (
+            (await db_session.execute(select(ItemImage).where(ItemImage.item_id == item.id)))
+            .scalars()
+            .all()
+        )
+        assert [e.image_path for e in extra] == [shirt[1].image_path]
+        assert await db_session.get(ItemEmbedding, item.id) is not None
+
+        # Confirming the rest closes the batch.
+        rest = await client.post(self._url(batch, "/confirm"), json={}, headers=auth_headers)
+        assert len(rest.json()["created_item_ids"]) == 1
+        assert rest.json()["status"] == "closed"
+
+    async def test_unready_garments_are_skipped_with_a_reason(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (dup, untyped) = await _garments(db_session, test_user, [1, 1])
+        item = ClothingItem(user_id=test_user.id, type="shirt", image_path="x.jpg")
+        db_session.add(item)
+        await db_session.flush()
+        dup[0].duplicate_of_item_id = item.id
+        untyped[0].tags = {"type": "unknown"}
+        await db_session.commit()
+        body = (
+            await client.post(
+                self._url(batch, "/confirm"),
+                json={"group_ids": [_gid(dup), _gid(untyped)]},
+                headers=auth_headers,
+            )
+        ).json()
+        assert body["created_item_ids"] == []
+        assert body["skipped"] == {
+            _gid(dup): "possible duplicate to resolve",
+            _gid(untyped): "type missing",
+        }
+        groups = {g["group_id"]: g for g in body["groups"]}
+        assert groups[_gid(dup)]["duplicate_item"]["id"] == str(item.id)
+
+    async def test_bulk_edit_and_rescue_of_a_failed_analysis(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (a, b) = await _garments(db_session, test_user, [1, 1])
+        b[0].status, b[0].tags, b[0].error = PhotoStatus.error, None, "bad answer"
+        await db_session.commit()
+        response = await client.patch(
+            self._url(batch, "/groups"),
+            json={
+                "group_ids": [_gid(a), _gid(b)],
+                "changes": {"type": "jeans", "season": ["winter"]},
+            },
+            headers=auth_headers,
+        )
+        groups = {g["group_id"]: g for g in response.json()["groups"]}
+        assert groups[_gid(a)]["photos"][0]["tags"] == {
+            "type": "jeans",
+            "primary_color": "white",
+            "season": ["winter"],
+        }
+        rescued = groups[_gid(b)]["photos"][0]
+        assert (rescued["status"], rescued["error"]) == ("ready", None)
+        assert groups[_gid(b)]["blocked_reason"] is None
+
+    async def test_merge_keeps_the_earliest_garment(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (first, label) = await _garments(db_session, test_user, [2, 1])
+        body = (
+            await client.post(
+                self._url(batch, "/merge"),
+                json={"group_ids": [_gid(label), _gid(first)]},
+                headers=auth_headers,
+            )
+        ).json()
+        (group,) = body["groups"]
+        assert group["group_id"] == _gid(first)
+        assert [p["id"] for p in group["photos"]] == [str(p.id) for p in first + label]
+        assert [p["is_primary"] for p in group["photos"]] == [True, False, False]
+
+        single = await client.post(
+            self._url(batch, "/merge"), json={"group_ids": [_gid(first)]}, headers=auth_headers
+        )
+        assert single.status_code == 409
+
+    async def test_split_of_the_primary_leaves_the_tags_with_the_rest(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (pair,) = await _garments(db_session, test_user, [2])
+        front, back = pair
+        body = (
+            await client.post(self._url(batch, f"/photos/{front.id}/split"), headers=auth_headers)
+        ).json()
+        groups = {g["primary_photo_id"]: g for g in body["groups"]}
+        assert groups[str(back.id)]["photos"][0]["tags"]["type"] == "shirt"
+        assert groups[str(front.id)]["photos"][0]["status"] == "tagging"
+        assert body["status"] == "processing"
+        self.enqueue.assert_awaited_once_with([front.id])
+
+        alone = await client.post(
+            self._url(batch, f"/photos/{back.id}/split"), headers=auth_headers
+        )
+        assert alone.status_code == 409
+
+    async def test_discard_deletes_files(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (pair, keep) = await _garments(db_session, test_user, [2, 1])
+        files = [ImageService().get_image_path(p.image_path) for p in pair]
+        assert all(f.exists() for f in files)
+        body = (
+            await client.post(
+                self._url(batch, "/discard"), json={"group_ids": [_gid(pair)]}, headers=auth_headers
+            )
+        ).json()
+        assert [g["group_id"] for g in body["groups"]] == [_gid(keep)]
+        assert body["counts"]["discarded"] == 2
+        assert not any(f.exists() for f in files)
+
+        missing = await client.post(
+            self._url(batch, "/discard"), json={"group_ids": [str(uuid4())]}, headers=auth_headers
+        )
+        assert missing.status_code == 404
+
+    async def test_duplicate_resolved_either_way(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        item = ClothingItem(user_id=test_user.id, type="jeans", image_path="x.jpg")
+        db_session.add(item)
+        await db_session.flush()
+        batch, (copy, new) = await _garments(db_session, test_user, [2, 1])
+        for members in (copy, new):
+            members[0].duplicate_of_item_id = item.id
+            members[0].tags = None
+        await db_session.commit()
+
+        attached = await client.post(
+            self._url(batch, f"/groups/{_gid(copy)}/attach"), json={}, headers=auth_headers
+        )
+        assert [g["group_id"] for g in attached.json()["groups"]] == [_gid(new)]
+        images = (
+            (await db_session.execute(select(ItemImage).where(ItemImage.item_id == item.id)))
+            .scalars()
+            .all()
+        )
+        assert sorted(i.image_path for i in images) == sorted(p.image_path for p in copy)
+
+        body = (
+            await client.post(
+                self._url(batch, f"/groups/{_gid(new)}/not-duplicate"), headers=auth_headers
+            )
+        ).json()
+        (group,) = body["groups"]
+        assert group["duplicate_item"] is None
+        assert group["photos"][0]["status"] == "tagging"
+        self.enqueue.assert_awaited_once_with([new[0].id])
+
+    async def test_retag_only_after_a_failure(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (ok, failed) = await _garments(db_session, test_user, [1, 1])
+        failed[0].status, failed[0].error = PhotoStatus.error, "timeout"
+        await db_session.commit()
+        # Plain values: the 409 below rolls the shared session back and expires the rows.
+        ok_gid, failed_gid, failed_id = _gid(ok), _gid(failed), failed[0].id
+        url = self._url(batch, "/groups/{}/retag")
+        assert (await client.post(url.format(ok_gid), headers=auth_headers)).status_code == 409
+        body = (await client.post(url.format(failed_gid), headers=auth_headers)).json()
+        statuses = {g["group_id"]: g["photos"][0]["status"] for g in body["groups"]}
+        assert statuses[failed_gid] == "tagging"
+        self.enqueue.assert_awaited_once_with([failed_id])
+
+    async def test_abandon_removes_unconfirmed_photos_only(
+        self, client, auth_headers, enabled, db_session, test_user
+    ):
+        batch, (kept, dropped) = await _garments(db_session, test_user, [1, 1])
+        await client.post(
+            self._url(batch, "/confirm"), json={"group_ids": [_gid(kept)]}, headers=auth_headers
+        )
+        kept_file = ImageService().get_image_path(kept[0].image_path)
+        dropped_file = ImageService().get_image_path(dropped[0].image_path)
+        response = await client.delete(self._url(batch), headers=auth_headers)
+        assert response.status_code == 204
+        assert kept_file.exists() and not dropped_file.exists()
+        assert (await client.get(self._url(batch), headers=auth_headers)).status_code == 404

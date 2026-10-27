@@ -1,0 +1,109 @@
+{
+  "nav": "To review",
+  "title": "To review",
+  "subtitle": "Upload many photos at once: the app groups them by garment, analyzes them, and you confirm what goes into the wardrobe.",
+  "upload": {
+    "drop": "Drop photos here or tap to choose them",
+    "addToOpen": "Add photos to the interrupted upload",
+    "hint": "One garment per photo. Shoot front, back and label one after another: they will be joined into one garment.",
+    "progress": "Uploading {sent} of {total} photos…",
+    "done": "{count, plural, one {# photo uploaded} other {# photos uploaded}}: preparing and analyzing",
+    "partial": "{stored} photos uploaded, {failed} not accepted",
+    "failed": "Upload failed. Try again: photos already sent are not stored twice."
+  },
+  "otherBatches": "Other uploads:",
+  "photoCount": "{count, plural, one {# photo} other {# photos}}",
+  "interrupted": {
+    "title": "Upload not finished",
+    "description": "{count, plural, one {# photo uploaded} other {# photos uploaded}} so far. Add more, or close the upload to start the analysis.",
+    "seal": "Close and analyze"
+  },
+  "paused": {
+    "title": "Analysis paused",
+    "description": "The AI's daily quota is used up. Analysis resumes on its own around {time}; meanwhile you can review the garments that are ready."
+  },
+  "working": "Preparing: {preparing} · Analyzing: {analyzing}",
+  "done": {
+    "title": "Every photo of this upload is sorted.",
+    "toWardrobe": "Go to wardrobe"
+  },
+  "empty": "Nothing to review.",
+  "summary": "{garments, plural, one {# garment} other {# garments}}, {ready} ready to confirm",
+  "selectAll": "Select all",
+  "selectNone": "Clear selection",
+  "confirmAll": "Confirm ready ({count})",
+  "ungrouped": "{count, plural, one {# photo still being prepared} other {# photos still being prepared}}",
+  "card": {
+    "untitled": "Garment to describe",
+    "select": "Select {name}",
+    "analyzing": "Analyzing",
+    "failed": "Error",
+    "typeMissing": "Type missing: open it and pick a type",
+    "duplicateOf": "You may already have it: {name}",
+    "attach": "Add the photos to that item",
+    "notDuplicate": "It's a new garment",
+    "edit": "Edit",
+    "retry": "Retry analysis",
+    "confirm": "Confirm"
+  },
+  "edit": {
+    "title": "Edit garment",
+    "bulkTitle": "Edit {count} garments",
+    "description": "Fix what the AI got wrong. If a photo does not belong, split it off: it becomes a garment of its own and is analyzed.",
+    "bulkDescription": "Only the fields you set are applied to every selected garment.",
+    "notSet": "Not set",
+    "keep": "Leave unchanged",
+    "setSeasons": "Set seasons",
+    "split": "Split",
+    "splitHint": "Make this photo a garment of its own",
+    "discard": "Discard garment",
+    "discardSelected": "Discard {count}",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "fields": {
+    "type": "Type",
+    "color": "Main colour",
+    "pattern": "Pattern",
+    "material": "Material",
+    "formality": "Formality",
+    "brand": "Brand",
+    "name": "Name",
+    "season": "Seasons"
+  },
+  "toolbar": {
+    "selected": "{count} selected",
+    "confirm": "Confirm",
+    "edit": "Edit",
+    "merge": "Merge",
+    "mergeHint": "The selected photos are the same garment",
+    "discard": "Discard",
+    "clear": "Clear selection"
+  },
+  "actions": {
+    "confirmed": "{count, plural, one {# garment added} other {# garments added}} to the wardrobe",
+    "skipped": "{count, plural, one {# garment is not ready yet} other {# garments are not ready yet}}",
+    "discarded": "{count, plural, one {Garment discarded} other {# garments discarded}}",
+    "attached": "Photos added to the item you already had",
+    "merged": "Garments merged",
+    "split": "Photo split off: it will be analyzed as a garment of its own",
+    "saved": "Changes saved",
+    "abandoned": "Upload deleted",
+    "failed": "Something went wrong"
+  },
+  "discardConfirm": {
+    "title": "{count, plural, one {Discard this garment?} other {Discard # garments?}}",
+    "description": "The photos are deleted and do not go into the wardrobe.",
+    "action": "Discard"
+  },
+  "abandon": {
+    "button": "Delete upload",
+    "title": "Delete this upload?",
+    "description": "Photos not yet confirmed are deleted. Garments already confirmed stay in the wardrobe.",
+    "action": "Delete"
+  },
+  "disabled": {
+    "title": "Feature not enabled",
+    "description": "The review upload is turned on with BATCH_UPLOAD_ENABLED=true in the server's .env file."
+  }
+}

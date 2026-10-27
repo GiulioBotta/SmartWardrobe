@@ -18,14 +18,18 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
+import { useInboxNavItem } from '@/lib/hooks/use-batch-inbox';
 
 export function Sidebar() {
   const pathname = usePathname();
   const t = useTranslations('nav');
+  // Fork: the batch upload inbox, listed only while BATCH_UPLOAD_ENABLED is on.
+  const inboxItem = useInboxNavItem();
 
   const navigation = [
     { name: t('dashboard'), href: '/dashboard', icon: Home },
     { name: t('wardrobe'), href: '/dashboard/wardrobe', icon: Shirt },
+    ...(inboxItem ? [inboxItem] : []),
     { name: t('suggestOutfit'), href: '/dashboard/suggest', icon: Sparkles },
     { name: t('outfits'), href: '/dashboard/outfits', icon: LayoutGrid },
     { name: t('pairings'), href: '/dashboard/pairings', icon: Layers },

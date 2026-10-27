@@ -68,6 +68,8 @@ async def feature_check() -> dict[str, Any]:
         "max_bulk_upload_count": get_settings().max_bulk_upload_count,
         # Fork: suggestion filters and whole-outfit scoring (SUGGESTION_COMBOS_ENABLED).
         "outfit_filters": get_settings().suggestion_combos_enabled,
+        # Fork: batch upload review inbox (BATCH_UPLOAD_ENABLED).
+        "batch_upload": get_settings().batch_upload_enabled,
     }
     try:
         get_provider()

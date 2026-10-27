@@ -100,7 +100,7 @@ async def item_with_same_hash(db: AsyncSession, user_id: UUID, image_hash: str) 
 
 
 async def refresh_batch_status(db: AsyncSession, batch: UploadBatch) -> None:
-    """Move a batch between processing and review from its photos; the caller commits."""
+    """Move a batch between processing, review and closed from its photos; the caller commits."""
     if batch.status == BatchStatus.closed or batch.sealed_at is None:
         return
     # Sessions here run without autoflush; the caller's status changes must count.
@@ -117,10 +117,25 @@ async def refresh_batch_status(db: AsyncSession, batch: UploadBatch) -> None:
             )
         )
     ).scalar_one()
-    batch.status = BatchStatus.processing if pending else BatchStatus.review
-    if not pending:
-        batch.paused_until = None
-        batch.pause_reason = None
+    if pending:
+        batch.status = BatchStatus.processing
+        return
+    batch.paused_until = None
+    batch.pause_reason = None
+    to_review = (
+        await db.execute(
+            select(func.count())
+            .select_from(UploadPhoto)
+            .where(
+                and_(
+                    UploadPhoto.batch_id == batch.id,
+                    UploadPhoto.status.in_([PhotoStatus.ready.value, PhotoStatus.error.value]),
+                )
+            )
+        )
+    ).scalar_one()
+    # Every photo confirmed or discarded: the inbox is done with this batch.
+    batch.status = BatchStatus.review if to_review else BatchStatus.closed
 
 
 def is_paused(batch: UploadBatch, now: datetime | None = None) -> bool:

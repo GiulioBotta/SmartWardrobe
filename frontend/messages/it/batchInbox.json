@@ -1,0 +1,109 @@
+{
+  "nav": "Da rivedere",
+  "title": "Da rivedere",
+  "subtitle": "Carica tante foto insieme: l'app le raggruppa per capo, le analizza e tu confermi cosa entra nell'armadio.",
+  "upload": {
+    "drop": "Trascina qui le foto o tocca per sceglierle",
+    "addToOpen": "Aggiungi foto al caricamento interrotto",
+    "hint": "Un capo per foto. Fotografa fronte, retro ed etichetta una dopo l'altra: verranno unite in un solo capo.",
+    "progress": "Caricamento {sent} di {total} foto…",
+    "done": "{count, plural, one {# foto caricata} other {# foto caricate}}: preparazione e analisi in corso",
+    "partial": "{stored} foto caricate, {failed} non accettate",
+    "failed": "Caricamento non riuscito. Riprova: le foto già inviate non vengono duplicate."
+  },
+  "otherBatches": "Altri caricamenti:",
+  "photoCount": "{count, plural, one {# foto} other {# foto}}",
+  "interrupted": {
+    "title": "Caricamento non completato",
+    "description": "{count, plural, one {# foto caricata} other {# foto caricate}} finora. Aggiungine altre o chiudi il caricamento per avviare l'analisi.",
+    "seal": "Chiudi e analizza"
+  },
+  "paused": {
+    "title": "Analisi in pausa",
+    "description": "La quota giornaliera dell'IA è esaurita. L'analisi riprende da sola verso {time}; intanto puoi rivedere i capi già pronti."
+  },
+  "working": "In preparazione: {preparing} · In analisi: {analyzing}",
+  "done": {
+    "title": "Tutte le foto di questo caricamento sono sistemate.",
+    "toWardrobe": "Vai all'armadio"
+  },
+  "empty": "Nessun caricamento da rivedere.",
+  "summary": "{garments, plural, one {# capo} other {# capi}}, {ready} pronti da confermare",
+  "selectAll": "Seleziona tutti",
+  "selectNone": "Deseleziona",
+  "confirmAll": "Conferma i pronti ({count})",
+  "ungrouped": "{count, plural, one {# foto ancora in preparazione} other {# foto ancora in preparazione}}",
+  "card": {
+    "untitled": "Capo da descrivere",
+    "select": "Seleziona {name}",
+    "analyzing": "In analisi",
+    "failed": "Errore",
+    "typeMissing": "Tipo mancante: aprilo e scegli il tipo",
+    "duplicateOf": "Forse ce l'hai già: {name}",
+    "attach": "Aggiungi le foto a quel capo",
+    "notDuplicate": "È un capo nuovo",
+    "edit": "Modifica",
+    "retry": "Riprova analisi",
+    "confirm": "Conferma"
+  },
+  "edit": {
+    "title": "Modifica capo",
+    "bulkTitle": "Modifica {count} capi",
+    "description": "Correggi quello che l'IA ha sbagliato. Se una foto non c'entra, separala: diventerà un capo a sé e verrà analizzata.",
+    "bulkDescription": "Solo i campi che imposti vengono applicati a tutti i capi selezionati.",
+    "notSet": "Non indicato",
+    "keep": "Non cambiare",
+    "setSeasons": "Imposta le stagioni",
+    "split": "Separa",
+    "splitHint": "Rendi questa foto un capo a sé",
+    "discard": "Scarta capo",
+    "discardSelected": "Scarta {count}",
+    "cancel": "Annulla",
+    "save": "Salva"
+  },
+  "fields": {
+    "type": "Tipo",
+    "color": "Colore principale",
+    "pattern": "Fantasia",
+    "material": "Materiale",
+    "formality": "Formalità",
+    "brand": "Marca",
+    "name": "Nome",
+    "season": "Stagioni"
+  },
+  "toolbar": {
+    "selected": "{count, plural, one {# selezionato} other {# selezionati}}",
+    "confirm": "Conferma",
+    "edit": "Modifica",
+    "merge": "Unisci",
+    "mergeHint": "Le foto selezionate sono lo stesso capo",
+    "discard": "Scarta",
+    "clear": "Annulla selezione"
+  },
+  "actions": {
+    "confirmed": "{count, plural, one {# capo aggiunto} other {# capi aggiunti}} all'armadio",
+    "skipped": "{count, plural, one {# capo non è ancora pronto} other {# capi non sono ancora pronti}}",
+    "discarded": "{count, plural, one {Capo scartato} other {# capi scartati}}",
+    "attached": "Foto aggiunte al capo che avevi già",
+    "merged": "Capi uniti",
+    "split": "Foto separata: verrà analizzata come capo a sé",
+    "saved": "Modifiche salvate",
+    "abandoned": "Caricamento eliminato",
+    "failed": "Operazione non riuscita"
+  },
+  "discardConfirm": {
+    "title": "{count, plural, one {Scartare questo capo?} other {Scartare # capi?}}",
+    "description": "Le foto vengono cancellate e non entrano nell'armadio.",
+    "action": "Scarta"
+  },
+  "abandon": {
+    "button": "Elimina caricamento",
+    "title": "Eliminare questo caricamento?",
+    "description": "Le foto non ancora confermate vengono cancellate. I capi già confermati restano nell'armadio.",
+    "action": "Elimina"
+  },
+  "disabled": {
+    "title": "Funzione non attiva",
+    "description": "Il caricamento con revisione si accende con BATCH_UPLOAD_ENABLED=true nel file .env del server."
+  }
+}

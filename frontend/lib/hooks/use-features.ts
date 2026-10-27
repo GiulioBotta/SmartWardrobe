@@ -13,6 +13,8 @@ interface Features {
   max_bulk_upload_count?: number;
   // Fork: suggestion filters and whole-outfit scoring are on (SUGGESTION_COMBOS_ENABLED).
   outfit_filters?: boolean;
+  // Fork: batch upload review inbox (BATCH_UPLOAD_ENABLED).
+  batch_upload?: boolean;
 }
 
 // An upload waits on this request before its first chunk, so a server that never answers

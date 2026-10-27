@@ -5,6 +5,11 @@ POST /upload-batches/{id}/photos     one chunk of photos (repeatable, idempotent
 POST /upload-batches/{id}/seal       no more photos: group and tag
 GET  /upload-batches                 open batches
 GET  /upload-batches/{id}            photos by garment, counts, quota pause
+DELETE /upload-batches/{id}          abandon: unconfirmed photos and their files go
+
+Review actions on garments (photos sharing group_id), each answering with the batch detail:
+confirm, PATCH groups, merge, discard, photos/{photo_id}/split,
+groups/{group_id}/not-duplicate, groups/{group_id}/attach, groups/{group_id}/retag.
 """
 
 import logging
@@ -15,20 +20,36 @@ from uuid import UUID
 
 from arq import create_pool
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, Field, computed_field
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
 from app.database import DbSession
+from app.models.item import ClothingItem
 from app.models.upload_batch import BatchStatus, PhotoStatus, UploadBatch, UploadPhoto
 from app.models.user import User
 from app.services.image_service import ImageService
 from app.services.upload_batch_service import item_with_same_hash, refresh_batch_status
+from app.services.upload_inbox_service import (
+    ACTIVE_STATUSES,
+    GroupChanges,
+    InboxActionError,
+    abandon_batch,
+    attach_to_item,
+    confirm_groups,
+    confirmable,
+    discard_groups,
+    merge_groups,
+    not_duplicate,
+    retag,
+    split_photo,
+    update_groups,
+)
 from app.utils.auth import get_current_user
 from app.utils.signed_urls import sign_optional
 from app.utils.uploads import UploadTooLargeError, read_upload_within_limit
-from app.workers.queues import IMAGE_QUEUE
+from app.workers.queues import IMAGE_QUEUE, TAGGING_QUEUE
 from app.workers.settings import get_redis_settings
 from app.workers.upload_batches import enqueue_group_if_ready
 
@@ -74,10 +95,27 @@ class PhotoResponse(BaseModel):
         return sign_optional(self.medium_path, self.image_path)
 
 
+class DuplicateItemResponse(BaseModel):
+    id: UUID
+    type: str
+    name: str | None = None
+    primary_color: str | None = None
+    thumbnail_path: str | None = None
+
+    @computed_field
+    @property
+    def thumbnail_url(self) -> str | None:
+        return sign_optional(self.thumbnail_path)
+
+
 class GroupResponse(BaseModel):
     group_id: UUID
     primary_photo_id: UUID
+    # Primary first, then shooting order.
     photos: list[PhotoResponse]
+    # Why the garment cannot be confirmed yet (None when it can).
+    blocked_reason: str | None = None
+    duplicate_item: DuplicateItemResponse | None = None
 
 
 class BatchResponse(BaseModel):
@@ -93,7 +131,8 @@ class BatchResponse(BaseModel):
 
 class BatchDetailResponse(BatchResponse):
     groups: list[GroupResponse] = []
-    # Photos not grouped yet (still being prepared, or failed before grouping).
+    # Photos not grouped yet (still being prepared, or failed before grouping). Confirmed and
+    # discarded photos are left out of both lists; `counts` still has them.
     ungrouped: list[PhotoResponse] = []
 
 
@@ -197,7 +236,10 @@ async def list_batches(
 async def get_batch(
     batch_id: UUID, db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
 ) -> BatchDetailResponse:
-    batch = await _get_batch(db, current_user.id, batch_id)
+    return await _detail(db, await _get_batch(db, current_user.id, batch_id))
+
+
+async def _detail(db: DbSession, batch: UploadBatch) -> BatchDetailResponse:
     photos = list(
         (
             await db.execute(
@@ -209,25 +251,50 @@ async def get_batch(
         .scalars()
         .all()
     )
+    active = [p for p in photos if p.status in ACTIVE_STATUSES]
     groups: dict[UUID, list[UploadPhoto]] = {}
-    ungrouped: list[PhotoResponse] = []
-    for photo in photos:
-        if photo.group_id is None:
-            ungrouped.append(PhotoResponse.model_validate(photo))
-        else:
+    for photo in active:
+        if photo.group_id is not None:
             groups.setdefault(photo.group_id, []).append(photo)
+    for members in groups.values():
+        members.sort(key=lambda p: (not p.is_primary, p.position))
+    duplicate_ids = {m[0].duplicate_of_item_id for m in groups.values()} - {None}
+    duplicates = (
+        {
+            item.id: item
+            for item in (
+                await db.execute(select(ClothingItem).where(ClothingItem.id.in_(duplicate_ids)))
+            ).scalars()
+        }
+        if duplicate_ids
+        else {}
+    )
     base = _batch_response(batch, Counter(p.status for p in photos))
     return BatchDetailResponse(
         **base.model_dump(),
         groups=[
             GroupResponse(
                 group_id=group_id,
-                primary_photo_id=next((p.id for p in members if p.is_primary), members[0].id),
+                primary_photo_id=members[0].id,
                 photos=[PhotoResponse.model_validate(p) for p in members],
+                blocked_reason=confirmable(members),
+                duplicate_item=_duplicate_item(duplicates.get(members[0].duplicate_of_item_id)),
             )
             for group_id, members in groups.items()
         ],
-        ungrouped=ungrouped,
+        ungrouped=[PhotoResponse.model_validate(p) for p in active if p.group_id is None],
+    )
+
+
+def _duplicate_item(item: ClothingItem | None) -> "DuplicateItemResponse | None":
+    if item is None:
+        return None
+    return DuplicateItemResponse(
+        id=item.id,
+        type=item.type,
+        name=item.name,
+        primary_color=item.primary_color,
+        thumbnail_path=item.thumbnail_path or item.image_path,
     )
 
 
@@ -435,3 +502,171 @@ async def seal_batch(
         except Exception as e:
             logger.error(f"Failed to queue grouping for batch {batch.id}: {e}")
     return _batch_response(batch, counts)
+
+
+class GroupSelection(BaseModel):
+    group_ids: list[UUID] = Field(min_length=1)
+
+
+class ConfirmRequest(BaseModel):
+    # None confirms every garment that is ready.
+    group_ids: list[UUID] | None = None
+
+
+class ConfirmResponse(BatchDetailResponse):
+    created_item_ids: list[UUID] = []
+    # group_id -> why it was not confirmed
+    skipped: dict[UUID, str] = {}
+
+
+class GroupUpdateRequest(GroupSelection):
+    changes: GroupChanges
+
+
+class AttachRequest(BaseModel):
+    # Defaults to the item the duplicate check found.
+    item_id: UUID | None = None
+
+
+async def _act(db: DbSession, batch: UploadBatch, action, *args):
+    """Run an inbox action, commit, queue the tagging it asks for, and map its errors."""
+    try:
+        result = await action(db, batch, *args)
+    except InboxActionError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from None
+    except LookupError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+    await db.commit()
+    return result
+
+
+async def _enqueue_tagging(photo_ids: list[UUID]) -> None:
+    # A job that never reaches Redis is re-queued by the recovery cron.
+    if not photo_ids:
+        return
+    try:
+        redis = await create_pool(get_redis_settings())
+    except Exception as e:
+        logger.error(f"Failed to connect to Redis for batch tagging: {e}")
+        return
+    try:
+        for photo_id in photo_ids:
+            await redis.enqueue_job(
+                "tag_upload_group_job",
+                str(photo_id),
+                _queue_name=TAGGING_QUEUE,
+                _job_id=f"upload-tag:{photo_id}",
+            )
+    except Exception as e:
+        logger.error(f"Failed to queue batch tagging: {e}")
+    finally:
+        await redis.aclose()
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+@router.post("/{batch_id}/confirm", response_model=ConfirmResponse, dependencies=[EnabledGuard])
+async def confirm(
+    batch_id: UUID, body: ConfirmRequest, db: DbSession, current_user: CurrentUser
+) -> ConfirmResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    created, skipped = await _act(db, batch, confirm_groups, body.group_ids)
+    detail = await _detail(db, batch)
+    return ConfirmResponse(
+        **detail.model_dump(),
+        created_item_ids=created,
+        skipped=skipped if body.group_ids is not None else {},
+    )
+
+
+@router.patch("/{batch_id}/groups", response_model=BatchDetailResponse, dependencies=[EnabledGuard])
+async def update(
+    batch_id: UUID, body: GroupUpdateRequest, db: DbSession, current_user: CurrentUser
+) -> BatchDetailResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await _act(db, batch, update_groups, body.group_ids, body.changes)
+    return await _detail(db, batch)
+
+
+@router.post("/{batch_id}/merge", response_model=BatchDetailResponse, dependencies=[EnabledGuard])
+async def merge(
+    batch_id: UUID, body: GroupSelection, db: DbSession, current_user: CurrentUser
+) -> BatchDetailResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await _act(db, batch, merge_groups, body.group_ids)
+    return await _detail(db, batch)
+
+
+@router.post("/{batch_id}/discard", response_model=BatchDetailResponse, dependencies=[EnabledGuard])
+async def discard(
+    batch_id: UUID, body: GroupSelection, db: DbSession, current_user: CurrentUser
+) -> BatchDetailResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await _act(db, batch, discard_groups, body.group_ids)
+    return await _detail(db, batch)
+
+
+@router.post(
+    "/{batch_id}/photos/{photo_id}/split",
+    response_model=BatchDetailResponse,
+    dependencies=[EnabledGuard],
+)
+async def split(
+    batch_id: UUID, photo_id: UUID, db: DbSession, current_user: CurrentUser
+) -> BatchDetailResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await _enqueue_tagging(await _act(db, batch, split_photo, photo_id))
+    return await _detail(db, batch)
+
+
+@router.post(
+    "/{batch_id}/groups/{group_id}/not-duplicate",
+    response_model=BatchDetailResponse,
+    dependencies=[EnabledGuard],
+)
+async def mark_not_duplicate(
+    batch_id: UUID, group_id: UUID, db: DbSession, current_user: CurrentUser
+) -> BatchDetailResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await _enqueue_tagging(await _act(db, batch, not_duplicate, group_id))
+    return await _detail(db, batch)
+
+
+@router.post(
+    "/{batch_id}/groups/{group_id}/attach",
+    response_model=BatchDetailResponse,
+    dependencies=[EnabledGuard],
+)
+async def attach(
+    batch_id: UUID,
+    group_id: UUID,
+    body: AttachRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> BatchDetailResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await _act(db, batch, attach_to_item, group_id, body.item_id)
+    return await _detail(db, batch)
+
+
+@router.post(
+    "/{batch_id}/groups/{group_id}/retag",
+    response_model=BatchDetailResponse,
+    dependencies=[EnabledGuard],
+)
+async def retag_group(
+    batch_id: UUID, group_id: UUID, db: DbSession, current_user: CurrentUser
+) -> BatchDetailResponse:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await _enqueue_tagging(await _act(db, batch, retag, group_id))
+    return await _detail(db, batch)
+
+
+@router.delete("/{batch_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[EnabledGuard])
+async def delete_batch(batch_id: UUID, db: DbSession, current_user: CurrentUser) -> None:
+    batch = await _get_batch(db, current_user.id, batch_id)
+    await abandon_batch(db, batch)
+    await db.commit()
