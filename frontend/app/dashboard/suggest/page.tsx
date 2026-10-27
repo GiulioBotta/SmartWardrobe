@@ -27,8 +27,6 @@ import {
   Snowflake,
   CalendarDays,
   CloudLightning,
-  Plus,
-  X,
   Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,24 +35,21 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { ItemPicker } from '@/components/shared/item-picker';
 import { OccasionChips } from '@/components/shared/occasion-chips';
+import { OutfitFilterPanel } from '@/components/suggest/outfit-filter-panel';
+import { PinnedItemsPicker } from '@/components/suggest/pinned-items-picker';
+import { SwapItemDialog } from '@/components/suggest/swap-item-dialog';
+import { useFeatures } from '@/lib/hooks/use-features';
+import { EMPTY_FILTERS, OutfitFilters, toRequestFilters } from '@/lib/suggest-filters';
 import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { useItem } from '@/lib/hooks/use-items';
 import { api, ApiError } from '@/lib/api';
 import { applySessionToken } from '@/lib/hooks/use-session-token';
-import { ClothingTypeValue, CurrentWeather, Item, Outfit, SuggestRequest } from '@/lib/types';
+import { CurrentWeather, Item, Outfit, OutfitItem, SuggestRequest } from '@/lib/types';
 import { useWeather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
 import { cn, formatShortDate } from '@/lib/utils';
@@ -273,24 +268,27 @@ function WeatherOverrideSection({
 
 function OutfitCard({
   outfit,
-  baseItemId,
+  baseItemIds,
   temperatureUnit,
   t,
   onAccept,
   onReject,
+  onSwapItem,
   showActions = true,
   badgeLabel,
 }: {
   outfit: Outfit;
-  baseItemId?: string;
+  baseItemIds: Set<string>;
   temperatureUnit: TempUnit;
   t: Translator;
   onAccept?: () => void;
   onReject?: () => void;
+  onSwapItem?: (item: OutfitItem) => void;
   showActions?: boolean;
   badgeLabel?: string;
 }) {
   const typeLabel = useTypeLabel();
+  const tSwap = useTranslations('smartSuggest.swap');
   return (
     <Card className="overflow-hidden flex flex-col h-full">
       <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4 border-b">
@@ -322,7 +320,7 @@ function OutfitCard({
       <CardContent className="p-4 flex-1 flex flex-col justify-between space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           {outfit.items.map((item) => {
-            const isBase = !!baseItemId && item.id === baseItemId;
+            const isBase = baseItemIds.has(item.id);
             return (
               <Link
                 key={item.id}
@@ -337,6 +335,22 @@ function OutfitCard({
                     <Badge className="absolute top-2 left-2 z-10 bg-primary/95 text-primary-foreground text-[10px] px-2 py-0.5 shadow-sm">
                       {t('baseItem.basePiece')}
                     </Badge>
+                  )}
+                  {onSwapItem && !isBase && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSwapItem(item);
+                      }}
+                      className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 rounded-full bg-background/90 border px-2 py-0.5 text-[10px] font-medium shadow-sm opacity-90 hover:opacity-100 hover:border-primary/60"
+                      aria-label={tSwap('title', { item: item.name || typeLabel(item.type) })}
+                      data-testid="swap-item"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      {tSwap('button')}
+                    </button>
                   )}
                   {item.thumbnail_url ? (
                     <Image
@@ -403,7 +417,7 @@ function OutfitResultsView({
   outfits,
   occasion,
   temperatureUnit,
-  baseItemId,
+  baseItemIds,
   activeOptionIndex,
   onSelectOption,
   isCompareAll,
@@ -412,12 +426,13 @@ function OutfitResultsView({
   onReject,
   onTryAnother,
   onNewRequest,
+  onSwapItem,
   t,
 }: {
   outfits: Outfit[];
   occasion: string;
   temperatureUnit: TempUnit;
-  baseItemId?: string;
+  baseItemIds: Set<string>;
   activeOptionIndex: number;
   onSelectOption: (index: number) => void;
   isCompareAll: boolean;
@@ -426,6 +441,7 @@ function OutfitResultsView({
   onReject: (outfit?: Outfit) => void;
   onTryAnother: () => void;
   onNewRequest: () => void;
+  onSwapItem: (outfit: Outfit, item: OutfitItem) => void;
   t: Translator;
 }) {
   const locale = useLocale();
@@ -515,12 +531,13 @@ function OutfitResultsView({
               <OutfitCard
                 key={opt.id}
                 outfit={opt}
-                baseItemId={baseItemId}
+                baseItemIds={baseItemIds}
                 temperatureUnit={temperatureUnit}
                 t={t}
                 badgeLabel={t('options.optionNumber', { number: idx + 1 })}
                 onAccept={() => onAccept(opt)}
                 onReject={() => onReject(opt)}
+                onSwapItem={(item) => onSwapItem(opt, item)}
                 showActions={true}
               />
             ))}
@@ -537,9 +554,10 @@ function OutfitResultsView({
         <div className="space-y-6">
           <OutfitCard
             outfit={currentOutfit}
-            baseItemId={baseItemId}
+            baseItemIds={baseItemIds}
             temperatureUnit={temperatureUnit}
             t={t}
+            onSwapItem={(item) => onSwapItem(currentOutfit, item)}
             badgeLabel={outfits.length > 1 ? t('options.optionNumber', { number: activeOptionIndex + 1 }) : undefined}
             onAccept={() => onAccept(currentOutfit)}
             onReject={() => onReject(currentOutfit)}
@@ -576,15 +594,8 @@ async function discardAlternatives(outfits: Outfit[], keepId?: string) {
   );
 }
 
-const BASE_ITEM_FILTER_TYPES = [
-  'shirt', 't-shirt', 'pants', 'jeans', 'shoes', 'sneakers', 'jacket', 'dress',
-] as const satisfies readonly ClothingTypeValue[];
-
 function SuggestContent() {
-  const typeLabel = useTypeLabel();
   const t = useTranslations('suggest');
-  const tCommon = useTranslations('common');
-  const tTypes = useTranslations('constants.types');
   const searchParams = useSearchParams();
   const preselectedItemId = searchParams.get('item');
   const { data: preselectedItem } = useItem(preselectedItemId || '');
@@ -595,9 +606,10 @@ function SuggestContent() {
   const [selectedOccasion, setSelectedOccasion] = useState<string | null>(null);
   const [occasionInitialized, setOccasionInitialized] = useState(false);
   const [weatherOverride, setWeatherOverride] = useState<WeatherOverride | null>(null);
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  const [isItemPickerOpen, setIsItemPickerOpen] = useState(false);
-  const [filterType, setFilterType] = useState<string | undefined>(undefined);
+  const [selectedItems, setSelectedItems] = useState<Item[]>([]);
+  const [filters, setFilters] = useState<OutfitFilters>(EMPTY_FILTERS);
+  const [swapTarget, setSwapTarget] = useState<{ outfit: Outfit; item: OutfitItem } | null>(null);
+  const { data: features } = useFeatures();
   const [isGenerating, setIsGenerating] = useState(false);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [activeOptionIndex, setActiveOptionIndex] = useState<number>(0);
@@ -605,10 +617,12 @@ function SuggestContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (preselectedItem && !selectedItem) {
-      setSelectedItem(preselectedItem);
+    if (preselectedItem && selectedItems.length === 0) {
+      setSelectedItems([preselectedItem]);
     }
-  }, [preselectedItem, selectedItem]);
+    // Only the preselected item from the URL seeds the list, once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedItem]);
 
   useEffect(() => {
     if (prefs?.default_occasion && !occasionInitialized && !selectedOccasion) {
@@ -626,10 +640,13 @@ function SuggestContent() {
     setError(null);
 
     try {
-      const request: SuggestRequest = {
+      const request: SuggestRequest & { filters?: Partial<OutfitFilters> } = {
         occasion: selectedOccasion,
-        include_items: selectedItem ? [selectedItem.id] : [],
+        include_items: selectedItems.map((i) => i.id),
       };
+      if (features?.outfit_filters) {
+        request.filters = toRequestFilters(filters);
+      }
 
       if (weatherOverride) {
         request.weather_override = {
@@ -752,98 +769,16 @@ function SuggestContent() {
                 />
               </div>
 
-              {/* Base item selection */}
-              <div className="space-y-3 pt-1 border-t">
-                <div className="space-y-0.5">
-                  <h2 className="font-semibold text-sm sm:text-base flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    {t('baseItem.title')}
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {t('baseItem.subtitle')}
-                  </p>
-                </div>
+              {/* Pinned items (several) */}
+              <PinnedItemsPicker items={selectedItems} onChange={setSelectedItems} />
 
-                {!selectedItem ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full h-16 border-dashed border-2 flex items-center justify-center gap-3 hover:border-primary/60 hover:bg-primary/5 transition-all text-muted-foreground hover:text-foreground"
-                    onClick={() => setIsItemPickerOpen(true)}
-                  >
-                    <div className="p-2 rounded-full bg-muted">
-                      <Plus className="h-4 w-4" />
-                    </div>
-                    <div className="text-left">
-                      <span className="text-sm font-medium block text-foreground">
-                        {t('baseItem.chooseItem')}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {t('baseItem.chooseItemHint')}
-                      </span>
-                    </div>
-                  </Button>
-                ) : (
-                  <div className="flex items-center justify-between p-3 rounded-xl border bg-card/80 shadow-sm gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="relative w-14 h-14 rounded-lg overflow-hidden border bg-muted flex-shrink-0">
-                        {selectedItem.thumbnail_url || selectedItem.image_url ? (
-                          <Image
-                            src={(selectedItem.thumbnail_url || selectedItem.image_url)!}
-                            alt={selectedItem.name || typeLabel(selectedItem.type)}
-                            fill
-                            className="object-cover"
-                            sizes="56px"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-muted">
-                            <Shirt className="h-6 w-6 text-muted-foreground" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="default" className="text-[10px] px-1.5 py-0">
-                            {t('baseItem.mustInclude')}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px] capitalize px-1.5 py-0">
-                            {typeLabel(selectedItem.type)}
-                          </Badge>
-                        </div>
-                        <p className="text-sm font-medium truncate">
-                          {selectedItem.name || typeLabel(selectedItem.type)}
-                        </p>
-                        {selectedItem.primary_color && (
-                          <p className="text-xs text-muted-foreground capitalize truncate">
-                            {selectedItem.primary_color}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsItemPickerOpen(true)}
-                        className="text-xs"
-                      >
-                        {t('baseItem.change')}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setSelectedItem(null)}
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        title={t('baseItem.remove')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {features?.outfit_filters && (
+                <OutfitFilterPanel
+                  filters={filters}
+                  onChange={setFilters}
+                  hasPinned={selectedItems.length > 0}
+                />
+              )}
 
               {/* Weather override (collapsible) */}
               <WeatherOverrideSection
@@ -886,88 +821,27 @@ function SuggestContent() {
           onToggleCompareAll={() => setIsCompareAll(!isCompareAll)}
           occasion={selectedOccasion || 'casual'}
           temperatureUnit={temperatureUnit}
-          baseItemId={selectedItem?.id}
+          baseItemIds={new Set(selectedItems.map((i) => i.id))}
           onAccept={handleAccept}
           onReject={handleReject}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}
+          onSwapItem={(outfit, item) => setSwapTarget({ outfit, item })}
           t={t}
         />
       )}
 
-      {/* Item Picker Dialog */}
-      <Dialog open={isItemPickerOpen} onOpenChange={setIsItemPickerOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              {t('baseItem.dialogTitle')}
-            </DialogTitle>
-            <DialogDescription>
-              {t('baseItem.dialogDescription')}
-            </DialogDescription>
-          </DialogHeader>
+      {swapTarget && (
+        <SwapItemDialog
+          outfit={swapTarget.outfit}
+          item={swapTarget.item}
+          onClose={() => setSwapTarget(null)}
+          onSwapped={(updated) =>
+            setOutfits((current) => current.map((o) => (o.id === updated.id ? updated : o)))
+          }
+        />
+      )}
 
-          {/* Quick Category Filter Chips */}
-          <div className="flex gap-1.5 overflow-x-auto py-1 scrollbar-none">
-            {[
-              { label: t('baseItem.all'), value: undefined },
-              ...BASE_ITEM_FILTER_TYPES.map((value) => ({ label: tTypes(value), value })),
-            ].map((cat) => (
-              <Button
-                key={cat.value ?? 'all'}
-                type="button"
-                variant={filterType === cat.value ? 'default' : 'outline'}
-                size="sm"
-                className="text-xs h-7 px-2.5 rounded-full flex-shrink-0"
-                onClick={() => setFilterType(cat.value)}
-              >
-                {cat.label}
-              </Button>
-            ))}
-          </div>
-
-          <div className="flex-1 overflow-hidden min-h-0 pt-1">
-            <ItemPicker
-              key={filterType ?? 'all'}
-              selectedIds={selectedItem ? new Set([selectedItem.id]) : new Set()}
-              onToggle={(item) => {
-                if (selectedItem?.id === item.id) {
-                  setSelectedItem(null);
-                } else {
-                  setSelectedItem(item);
-                  setIsItemPickerOpen(false);
-                }
-              }}
-              filterType={filterType}
-              hideNeedsWash={true}
-              heightClass="h-[340px]"
-            />
-          </div>
-
-          <div className="flex justify-between items-center pt-3 border-t mt-2">
-            {selectedItem ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedItem(null)}
-                className="text-xs text-muted-foreground hover:text-destructive"
-              >
-                {t('baseItem.clear')}
-              </Button>
-            ) : <div />}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsItemPickerOpen(false)}
-            >
-              {tCommon('done')}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

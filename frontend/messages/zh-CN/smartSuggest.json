@@ -1,0 +1,36 @@
+{
+  "filters": {
+    "title": "Filters",
+    "active": "{count, plural, one {# filter} other {# filters}}",
+    "intro": "Narrow the pieces the suggestions may use.",
+    "pinnedFormality": "Pieces also stay within one formality level of the items you pinned.",
+    "reset": "Reset",
+    "palette": "Colours",
+    "paletteHint": "Tap once to keep a colour, twice to avoid it. Neutrals always fit.",
+    "formality": "Formality",
+    "skipTypes": "Skip today",
+    "favoritesOnly": "Favourites only",
+    "notWorn": "Not worn in",
+    "notWornAny": "Any time",
+    "notWornDays": "{days} days"
+  },
+  "pinned": {
+    "title": "Build around these items (optional)",
+    "subtitle": "Up to {max} pieces that must appear in every outfit",
+    "add": "Choose items",
+    "addAnother": "Add another item",
+    "remove": "Remove",
+    "clear": "Clear all",
+    "dialogTitle": "Items every outfit must include",
+    "dialogDescription": "{count} of {max} selected. Two pieces for the same slot (two tops, a dress and trousers) cannot be combined."
+  },
+  "swap": {
+    "button": "Swap",
+    "title": "Swap {item}",
+    "description": "Alternatives ranked by how well they suit the rest of the outfit.",
+    "bestMatch": "Best match",
+    "none": "No other piece of this kind is available.",
+    "error": "Could not load the alternatives.",
+    "failed": "Could not swap the item."
+  }
+}

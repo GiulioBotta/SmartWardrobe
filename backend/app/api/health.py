@@ -66,6 +66,8 @@ async def feature_check() -> dict[str, Any]:
     features: dict[str, Any] = {
         "max_upload_size_mb": get_settings().max_upload_size_mb,
         "max_bulk_upload_count": get_settings().max_bulk_upload_count,
+        # Fork: suggestion filters and whole-outfit scoring (SUGGESTION_COMBOS_ENABLED).
+        "outfit_filters": get_settings().suggestion_combos_enabled,
     }
     try:
         get_provider()

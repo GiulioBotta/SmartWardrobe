@@ -11,6 +11,8 @@ interface Features {
   background_removal: boolean;
   max_upload_size_mb: number;
   max_bulk_upload_count?: number;
+  // Fork: suggestion filters and whole-outfit scoring are on (SUGGESTION_COMBOS_ENABLED).
+  outfit_filters?: boolean;
 }
 
 // An upload waits on this request before its first chunk, so a server that never answers

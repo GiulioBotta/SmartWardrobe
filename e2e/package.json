@@ -1,0 +1,13 @@
+{
+  "name": "smartwardrobe-e2e",
+  "private": true,
+  "description": "Browser tests for the SmartWardrobe fork, run against the dev stack (docker compose ... up).",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "install-browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}

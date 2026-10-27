@@ -1,0 +1,36 @@
+{
+  "filters": {
+    "title": "Filtri",
+    "active": "{count, plural, one {# filtro} other {# filtri}}",
+    "intro": "Restringi i capi che le proposte possono usare.",
+    "pinnedFormality": "I capi restano anche entro un livello di formalità da quelli che hai fissato.",
+    "reset": "Azzera",
+    "palette": "Colori",
+    "paletteHint": "Un tocco per tenere un colore, due per evitarlo. I neutri vanno sempre bene.",
+    "formality": "Formalità",
+    "skipTypes": "Oggi escludi",
+    "favoritesOnly": "Solo preferiti",
+    "notWorn": "Non indossati da",
+    "notWornAny": "Qualsiasi",
+    "notWornDays": "{days} giorni"
+  },
+  "pinned": {
+    "title": "Costruisci attorno a questi capi (opzionale)",
+    "subtitle": "Fino a {max} capi che devono comparire in ogni outfit",
+    "add": "Scegli i capi",
+    "addAnother": "Aggiungi un altro capo",
+    "remove": "Rimuovi",
+    "clear": "Togli tutti",
+    "dialogTitle": "Capi da includere in ogni outfit",
+    "dialogDescription": "{count} di {max} selezionati. Due capi per lo stesso posto (due parti di sopra, un vestito e dei pantaloni) non si possono combinare."
+  },
+  "swap": {
+    "button": "Cambia",
+    "title": "Cambia {item}",
+    "description": "Alternative ordinate per quanto stanno bene con il resto dell'outfit.",
+    "bestMatch": "Migliore",
+    "none": "Non c'è un altro capo di questo tipo disponibile.",
+    "error": "Impossibile caricare le alternative.",
+    "failed": "Impossibile cambiare il capo."
+  }
+}

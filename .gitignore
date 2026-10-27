@@ -65,3 +65,7 @@ testing/
 .playwright-mcp
 *.review.yml
 *-test.yml
+
+# SmartWardrobe e2e (Playwright)
+e2e/test-results/
+e2e/playwright-report/
