@@ -10,6 +10,9 @@ os.environ["STORAGE_PATH"] = "/tmp/wardrobe_test"
 os.environ.pop("OIDC_ISSUER_URL", None)
 os.environ.pop("OIDC_CLIENT_ID", None)
 os.environ.pop("OIDC_CLIENT_SECRET", None)
+# Fork switches: upstream tests expect upstream behaviour; fork tests turn them on explicitly.
+os.environ.pop("AUTO_REMOVE_BACKGROUND", None)
+os.environ.pop("SUGGESTION_COMBOS_ENABLED", None)
 
 from collections.abc import AsyncGenerator
 from typing import Any

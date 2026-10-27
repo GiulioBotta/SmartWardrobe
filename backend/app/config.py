@@ -175,6 +175,14 @@ class Settings(BaseSettings):
     auto_remove_background: bool = Field(default=False)
     auto_remove_background_color: str = Field(default="#FFFFFF", pattern=r"^#[0-9A-Fa-f]{6}$")
 
+    # The fork's suggestion pipeline: user filters, formality within one level of pinned
+    # items, whole-outfit scoring, strict validation of the model's answer with one retry,
+    # then the best-scored outfits as fallback. Off keeps upstream behaviour unchanged.
+    suggestion_combos_enabled: bool = Field(default=False)
+    # How many scored outfits are offered to the model; 0 offers every candidate as upstream
+    # does and keeps the combinations only as the fallback.
+    suggestion_top_combos: int = Field(default=15, ge=0)
+
     @property
     def effective_ai_vision_enabled(self) -> bool:
         """Whether internal vision (auto-tagging) is active.

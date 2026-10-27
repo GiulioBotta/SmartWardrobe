@@ -10,6 +10,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import get_settings
 from app.models.item import ClothingItem, ItemStatus
 from app.models.learning import ItemPairScore, UserLearningProfile
 from app.models.outfit import (
@@ -24,6 +25,12 @@ from app.models.outfit import (
 from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
+from app.services.combo_scorer import (
+    Combo,
+    build_combos,
+    format_combos_section,
+    prompt_item_ids,
+)
 from app.services.item_scorer import (
     get_season,
     rain_likely,
@@ -33,6 +40,8 @@ from app.services.item_scorer import (
     stays_above_hot_threshold,
     temperature_band,
 )
+from app.services.outfit_filters import OutfitFilters, apply_filters, check_pinned_conflicts
+from app.services.outfit_validation import fit_and_recency, retry_note, validate_outfit_choice
 from app.services.suggestion_cache import pop_suggestion, push_suggestions
 from app.services.weather_service import (
     GeocodingServiceError,
@@ -786,18 +795,24 @@ class RecommendationService:
         count: int = 1,
         single_outfit: bool = False,
         scheduled_date: date | None = None,
+        filters: OutfitFilters | None = None,
     ) -> list[Outfit]:
         # Guard first so deferral is unconditional, before any location/weather work.
         require_internal_ai("text")
 
         exclude_items = exclude_items or []
         include_items = include_items or []
+        settings = get_settings()
+        # The fork's pipeline (filters, whole-outfit scoring, strict validation). Notification
+        # outfits keep the upstream single-outfit path.
+        use_combos = settings.suggestion_combos_enabled and not single_outfit
+        has_filters = filters is not None and not filters.is_empty()
 
         if not time_of_day:
             time_of_day = get_time_of_day(user)
 
         # Determine cache eligibility before auto-merge
-        use_cache = not exclude_items and not single_outfit
+        use_cache = not exclude_items and not single_outfit and not has_filters
 
         # Auto-exclude today's rejected items for this occasion
         rejected_ids = await self._get_today_rejected_item_ids(user, occasion)
@@ -877,6 +892,11 @@ class RecommendationService:
             if unresolved:
                 raise ValueError("One or more selected items could not be found or are not ready.")
 
+        if use_combos:
+            pinned_set = set(include_items)
+            check_pinned_conflicts([item for item in candidates if item.id in pinned_set])
+            candidates = apply_filters(candidates, filters, pinned_set, get_user_today(user))
+
         if len(candidates) < 2:
             raise InsufficientWardrobeError(
                 "Not enough items in wardrobe for recommendation. "
@@ -954,9 +974,47 @@ class RecommendationService:
             mandatory_item_ids=set(include_items) if include_items else None,
         )
 
+        combos: list[Combo] = []
+        prompt_entries: list = scored
+        if use_combos:
+            item_fit, item_recency = fit_and_recency(
+                candidates,
+                weather,
+                occasion,
+                current_season,
+                preferences,
+                learned_prefs,
+                user_today,
+                recently_worn_dates,
+            )
+            combos = build_combos(
+                candidates,
+                set(include_items),
+                item_fit,
+                item_recency,
+                good_pairs,
+                need_outer=temperature_band(weather.temperature, preferences) == "cold"
+                or rain_likely(weather),
+                top_n=settings.suggestion_top_combos or len(candidates) ** 2,
+            )
+            if settings.suggestion_top_combos and combos:
+                by_id = {item.id: item for item in candidates}
+                prompt_entries = [
+                    by_id[iid]
+                    for iid in prompt_item_ids(combos, candidates, set(include_items), item_fit)
+                ]
+
         # Format enriched prompt
-        items_text, number_map = self._format_items_for_prompt(scored, good_pairs, user_today)
+        items_text, number_map = self._format_items_for_prompt(
+            prompt_entries, good_pairs, user_today
+        )
         mandatory_items_section = self._format_mandatory_items_section(include_items, number_map)
+        if use_combos and settings.suggestion_top_combos:
+            number_of = {iid: num for num, iid in number_map.items()}
+            combos_section = format_combos_section(combos, number_of)
+            mandatory_items_section = "\n\n".join(
+                s for s in (mandatory_items_section, combos_section) if s
+            )
 
         worn_combinations = await self._get_recently_worn_outfit_combinations(user, days=7)
         suggested_combinations = await self._get_recently_suggested_outfit_combinations(
@@ -1042,6 +1100,34 @@ class RecommendationService:
                 )
                 return [outfit]
 
+            if use_combos:
+                chosen, leftovers = await self._strict_outfit_choices(
+                    ai_service,
+                    prompt,
+                    result,
+                    number_map,
+                    item_type_map,
+                    set(include_items),
+                    drop_legwear,
+                    combos,
+                    count,
+                )
+                outfits = [
+                    await self._save_outfit(
+                        od, item_ids, item_type_map, user, weather, occasion, source, scheduled_date
+                    )
+                    for od, item_ids in chosen
+                ]
+                if use_cache and leftovers:
+                    serializable_map = {str(k): str(v) for k, v in number_map.items()}
+                    for od in leftovers:
+                        od["_number_map"] = serializable_map
+                        od["_context"] = context
+                    await push_suggestions(
+                        user.id, occasion, leftovers, include_items=include_items
+                    )
+                return outfits
+
             # Multi-outfit parse
             outfit_list = self._parse_multi_outfit_response(result.content)
 
@@ -1122,6 +1208,7 @@ class RecommendationService:
         time_of_day: TimeOfDay | None = None,
         single_outfit: bool = False,
         scheduled_date: date | None = None,
+        filters: OutfitFilters | None = None,
     ) -> Outfit:
         outfits = await self.generate_recommendations(
             user=user,
@@ -1134,8 +1221,74 @@ class RecommendationService:
             count=1,
             single_outfit=single_outfit,
             scheduled_date=scheduled_date,
+            filters=filters,
         )
         return outfits[0]
+
+    async def _strict_outfit_choices(
+        self,
+        ai_service: AIService,
+        prompt: str,
+        first_result,
+        number_map: dict[int, UUID],
+        item_type_map: dict[UUID, str],
+        pinned_ids: set[UUID],
+        drop_legwear: bool,
+        combos: list[Combo],
+        count: int,
+    ) -> tuple[list[tuple[dict, list[UUID]]], list[dict]]:
+        """Up to `count` outfits: the model's valid choices, one retry, then scored combos.
+
+        Returns (chosen, leftovers), leftovers being further valid model choices to cache.
+        """
+        valid: list[tuple[dict, list[UUID]]] = []
+        reasons: list[str] = []
+
+        def collect(result) -> None:
+            try:
+                outfit_list = self._parse_multi_outfit_response(result.content)
+            except ValueError:
+                reasons.append("the answer was not valid JSON")
+                return
+            for od in outfit_list:
+                item_ids, reason = validate_outfit_choice(od, number_map, item_type_map, pinned_ids)
+                if item_ids is None:
+                    reasons.append(reason)
+                    continue
+                if drop_legwear:
+                    item_ids = remove_legwear(item_ids, item_type_map, pinned_ids)
+                if any(set(item_ids) == set(ids) for _, ids in valid):
+                    continue
+                od["_ai_model"] = result.model
+                od["_ai_endpoint"] = result.endpoint
+                valid.append((od, item_ids))
+
+        collect(first_result)
+        if len(valid) < count and reasons:
+            uuid_to_number = {iid: num for num, iid in number_map.items()}
+            mandatory_numbers = [uuid_to_number[i] for i in pinned_ids if i in uuid_to_number]
+            logger.warning(f"AI outfit answer rejected ({reasons[0]}), retrying once")
+            try:
+                retry = await ai_service.generate_text(
+                    prompt + retry_note(reasons[0], mandatory_numbers), return_metadata=True
+                )
+                collect(retry)
+            except Exception as e:
+                logger.error(f"AI retry for outfit suggestions failed: {e}")
+
+        chosen = valid[:count]
+        for rank, combo in enumerate(combos, 1):
+            if len(chosen) >= count:
+                break
+            ids = list(combo.item_ids)
+            if any(set(ids) == set(c) for _, c in chosen):
+                continue
+            logger.info(f"Falling back to scored combination #{rank}")
+            chosen.append((combo.as_outfit_data(rank), ids))
+
+        if not chosen:
+            raise AIRecommendationError("AI did not select any valid items")
+        return chosen, [od for od, _ in valid[count:]]
 
 
 class InsufficientWardrobeError(Exception):

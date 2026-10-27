@@ -32,6 +32,7 @@ from app.services.ai_service import AIDisabledError
 from app.services.external_outfit_service import ExternalOutfitService
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
+from app.services.outfit_filters import OutfitFilters
 from app.services.outfit_service import OutfitListFilters, OutfitService
 from app.services.recommendation_service import (
     AIRecommendationError,
@@ -81,6 +82,9 @@ class SuggestRequest(BaseModel):
     weather_override: WeatherOverrideRequest | None = None
     exclude_items: list[UUID] = Field(default_factory=list, description="Items to exclude")
     include_items: list[UUID] = Field(default_factory=list, description="Items to include")
+    filters: OutfitFilters | None = Field(
+        default=None, description="Only used when SUGGESTION_COMBOS_ENABLED is on"
+    )
 
 
 class OutfitItemResponse(BaseModel):
@@ -437,6 +441,7 @@ async def suggest_outfit(
             exclude_items=request.exclude_items,
             include_items=request.include_items,
             time_of_day=request.time_of_day,
+            filters=request.filters,
         )
     except InsufficientWardrobeError as e:
         raise HTTPException(
@@ -505,6 +510,7 @@ async def suggest_outfit_options(
             include_items=request.include_items,
             time_of_day=request.time_of_day,
             count=3,
+            filters=request.filters,
         )
     except InsufficientWardrobeError as e:
         raise HTTPException(
