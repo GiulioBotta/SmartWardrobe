@@ -76,7 +76,8 @@ class TestWorkerSplit:
         assert ImageWorkerSettings.queue_name == IMAGE_QUEUE
 
     def test_image_worker_carries_both_image_jobs(self):
-        assert set(ImageWorkerSettings.functions) == {
+        # >= rather than ==: the fork adds its batch upload jobs to this worker.
+        assert set(ImageWorkerSettings.functions) >= {
             rotate_item_image_job,
             remove_item_background_job,
         }

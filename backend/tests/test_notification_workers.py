@@ -947,5 +947,7 @@ class TestWorkerFunctionRegistry:
             "check_scheduled_notifications",
             "check_wash_reminders",
             "update_learning_profiles",
+            # Fork: batch upload inbox tagging.
+            "tag_upload_group_job",
         }
         assert func_names == expected

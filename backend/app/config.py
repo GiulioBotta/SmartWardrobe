@@ -213,6 +213,15 @@ class Settings(BaseSettings):
     # Threads for one ONNX inference; kept low so embedding never starves the API on a small box.
     embedding_threads: int = Field(default=2, ge=1)
 
+    # The fork's batch upload inbox (/upload-batches): photos are stored, cleaned up and
+    # embedded locally, grouped into garments, tagged once per garment, then reviewed.
+    batch_upload_enabled: bool = Field(default=False)
+    max_batch_photos: int = Field(default=300, ge=1)
+    # Consecutive photos at least this similar are taken as one garment (front, back...).
+    batch_group_threshold: float = Field(default=0.90, ge=0, le=1)
+    # A photo this similar to an item already in the wardrobe is flagged as its duplicate.
+    batch_duplicate_threshold: float = Field(default=0.95, ge=0, le=1)
+
     @property
     def effective_ai_vision_enabled(self) -> bool:
         """Whether internal vision (auto-tagging) is active.

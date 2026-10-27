@@ -20,6 +20,7 @@ from app.workers.notifications import (
 from app.workers.queues import IMAGE_PROCESSING_KINDS, TAGGING_QUEUE, queue_for_kind
 from app.workers.settings import get_redis_settings
 from app.workers.tagging import TAGGING_MAX_TRIES, tag_item_image, worker_job_timeout_seconds
+from app.workers.upload_batches import tag_upload_group_job
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,8 @@ class WorkerSettings:
         process_scheduled_notification,
         check_wash_reminders,
         update_learning_profiles,
+        # Fork: AI tagging of one garment from the batch upload inbox.
+        tag_upload_group_job,
     ]
 
     cron_jobs = [

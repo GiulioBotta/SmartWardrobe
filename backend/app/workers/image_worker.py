@@ -10,6 +10,11 @@ from app.workers.embeddings import embed_pending_items_job
 from app.workers.queues import IMAGE_QUEUE
 from app.workers.rotation import rotate_item_image_job
 from app.workers.settings import get_redis_settings
+from app.workers.upload_batches import (
+    group_upload_batch_job,
+    prepare_upload_photo_job,
+    recover_upload_batches,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +42,17 @@ class ImageWorkerSettings:
     functions = [
         rotate_item_image_job,
         remove_item_background_job,
+        # Fork: batch upload inbox (BATCH_UPLOAD_ENABLED).
+        prepare_upload_photo_job,
+        group_upload_batch_job,
     ]
 
     # Fork: CLIP embeddings for new, re-cut or not yet embedded items (EMBEDDINGS_ENABLED).
     # Cron only, so arq does not need it in `functions` and nothing enqueues it by name.
-    cron_jobs = [cron(embed_pending_items_job, minute=set(range(0, 60, 2)))]
+    cron_jobs = [
+        cron(embed_pending_items_job, minute=set(range(0, 60, 2))),
+        cron(recover_upload_batches, minute=set(range(5, 60, 10))),
+    ]
 
     on_startup = startup
     on_shutdown = shutdown
