@@ -69,3 +69,6 @@ testing/
 # SmartWardrobe e2e (Playwright)
 e2e/test-results/
 e2e/playwright-report/
+
+# Brainstorming mockups (local only)
+.superpowers/

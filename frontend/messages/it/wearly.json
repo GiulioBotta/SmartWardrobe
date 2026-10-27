@@ -1,0 +1,46 @@
+{
+  "nav": {
+    "today": "Oggi",
+    "wardrobe": "Armadio",
+    "outfits": "Outfit",
+    "more": "Altro",
+    "inbox": "Da rivedere",
+    "analytics": "Analisi",
+    "settings": "Impostazioni"
+  },
+  "today": {
+    "greeting": {
+      "morning": "Buongiorno, {name}",
+      "afternoon": "Buon pomeriggio, {name}",
+      "evening": "Buonasera, {name}",
+      "morningNoName": "Buongiorno",
+      "afternoonNoName": "Buon pomeriggio",
+      "eveningNoName": "Buonasera"
+    },
+    "question": "Cosa indossi oggi?",
+    "nothingYet": "Non hai ancora registrato niente.",
+    "suggest": "Proponimi un outfit",
+    "pick": "Scelgo io",
+    "repeat": "Rimetti un look",
+    "loggedTitle": "Oggi indossi",
+    "addAnother": "Aggiungi un altro outfit",
+    "proposedTitle": "Ecco la proposta di oggi",
+    "wearIt": "Lo metto oggi",
+    "skip": "Scarta",
+    "pickTitle": "Scegli i capi",
+    "pickHint": "Tocca quello che hai addosso, poi scegli l'occasione e salva.",
+    "repeatTitle": "Rimetti un look recente",
+    "repeatThis": "Rimettilo oggi",
+    "nothingToRepeat": "Nessun outfit indossato negli ultimi 14 giorni.",
+    "noItems": "L'armadio è vuoto: carica prima qualche capo.",
+    "close": "Chiudi",
+    "recentTitle": "Indossati di recente",
+    "inboxReminder": "{count, plural, one {# foto da rivedere} other {# foto da rivedere}}"
+  },
+  "outfits": {
+    "tabs": {
+      "looks": "Look",
+      "history": "Cronologia"
+    }
+  }
+}

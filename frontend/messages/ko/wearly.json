@@ -1,0 +1,46 @@
+{
+  "nav": {
+    "today": "Today",
+    "wardrobe": "Wardrobe",
+    "outfits": "Outfits",
+    "more": "More",
+    "inbox": "To review",
+    "analytics": "Insights",
+    "settings": "Settings"
+  },
+  "today": {
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}",
+      "morningNoName": "Good morning",
+      "afternoonNoName": "Good afternoon",
+      "eveningNoName": "Good evening"
+    },
+    "question": "What are you wearing today?",
+    "nothingYet": "Nothing logged yet.",
+    "suggest": "Suggest an outfit",
+    "pick": "I'll pick",
+    "repeat": "Wear a look again",
+    "loggedTitle": "Today you're wearing",
+    "addAnother": "Add another outfit",
+    "proposedTitle": "Here's today's suggestion",
+    "wearIt": "Wearing it today",
+    "skip": "Skip",
+    "pickTitle": "Pick the pieces",
+    "pickHint": "Tap what you have on, then choose the occasion and save.",
+    "repeatTitle": "Wear a recent look again",
+    "repeatThis": "Wear it again today",
+    "nothingToRepeat": "No outfits worn in the last 14 days.",
+    "noItems": "The wardrobe is empty: upload some items first.",
+    "close": "Close",
+    "recentTitle": "Recently worn",
+    "inboxReminder": "{count, plural, one {# photo to review} other {# photos to review}}"
+  },
+  "outfits": {
+    "tabs": {
+      "looks": "Looks",
+      "history": "History"
+    }
+  }
+}

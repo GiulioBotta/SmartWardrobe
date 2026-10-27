@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-// The quick wear log: the "Today" page (repeat a past look, pick pieces by hand) and
+// The quick wear log: the "Oggi" home (repeat a past look, pick pieces by hand) and
 // "Wearing it today" on a suggestion. The wardrobe is read for real; every call that would
 // log a wear is answered here, so the dev history and wear counts stay untouched.
 
@@ -68,13 +68,13 @@ test('repeats a past look and logs hand-picked pieces as worn today', async ({ p
     await route.fulfill({ status: 201, json: outfit('00000000-0000-4000-8000-0000000000c9', 'logged', isoDaysAgo(0)) });
   });
 
+  // Wearly opens on "Oggi" (/dashboard) right after login.
   await login(page);
-  await expect(page.getByTestId('today-log-card')).toBeVisible();
-  await page.getByTestId('today-log-card').click();
-  await page.waitForURL(/\/dashboard\/today/);
-  await expect(page.getByRole('heading', { name: 'Cosa indossi oggi' })).toBeVisible();
-  await expect(page.getByText('Niente ancora per oggi.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cosa indossi oggi?' })).toBeVisible();
+  await expect(page.getByText('Non hai ancora registrato niente.')).toBeVisible();
+  await expect(page.getByText('Indossati di recente')).toBeVisible();
 
+  await page.getByRole('button', { name: 'Rimetti un look' }).click();
   const repeatCard = page.getByTestId('repeat-outfit');
   await expect(repeatCard).toHaveCount(1);
   await repeatCard.getByRole('button', { name: 'Rimettilo oggi' }).click();
@@ -86,6 +86,7 @@ test('repeats a past look and logs hand-picked pieces as worn today', async ({ p
   });
 
   // Pick two real pieces, switch the occasion, save.
+  await page.getByRole('button', { name: 'Scelgo io' }).click();
   const tiles = page.getByTestId('today-item');
   await expect(tiles.first()).toBeVisible();
   await tiles.nth(0).click();

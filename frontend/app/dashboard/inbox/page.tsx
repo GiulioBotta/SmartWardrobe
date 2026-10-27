@@ -1,6 +1,7 @@
 'use client';
 
 // Fork: review inbox for photos uploaded in a batch (BATCH_UPLOAD_ENABLED).
+import { PageHeader } from '@/components/brand/page-header';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
@@ -167,10 +168,7 @@ export default function InboxPage() {
 
   return (
     <div className="space-y-6 pb-24">
-      <div>
-        <h1 className="text-2xl font-bold">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('subtitle')}</p>
-      </div>
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
 
       <BatchUploader
         openBatchId={uploading ? batchId : null}

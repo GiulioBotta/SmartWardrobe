@@ -57,6 +57,9 @@ const OTHER_OCCASION_CONFIG = {
     'hover:border-zinc-400 hover:bg-zinc-50 data-[selected=true]:border-zinc-500 data-[selected=true]:bg-zinc-50 data-[selected=true]:text-zinc-700',
 };
 
+const WEARLY_CHIP =
+  'hover:border-brand/60 hover:bg-secondary data-[selected=true]:border-brand data-[selected=true]:bg-secondary data-[selected=true]:text-foreground';
+
 function configFor(value: string) {
   return value in OCCASION_CONFIG
     ? OCCASION_CONFIG[value as FeaturedOccasion]
@@ -84,7 +87,9 @@ export function OccasionChips({ selected, onSelect, extraOccasions = [] }: Occas
             className={cn(
               'inline-flex items-center gap-2 px-4 py-2.5 rounded-full border-2 transition-all',
               'border-muted bg-background',
-              config.color,
+              // Fork: one Wearly accent for every occasion instead of a colour each, which clashed
+              // with the Caffè e crema palette and washed out in the dark theme.
+              WEARLY_CHIP,
               'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50'
             )}
           >

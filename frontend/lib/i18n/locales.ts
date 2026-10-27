@@ -44,6 +44,7 @@ export const NAMESPACES = [
   'smartSuggest',
   'batchInbox',
   'quickLog',
+  'wearly',
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];

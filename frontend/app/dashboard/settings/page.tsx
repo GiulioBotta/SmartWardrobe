@@ -34,6 +34,8 @@ import { AVOID_REPEAT_DAYS, STYLE_SCORE, TEMPERATURE_THRESHOLDS_CELSIUS } from '
 import { DEFAULT_STYLE_PROFILE } from '@/lib/preferences';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
+import { isSectionVisible } from '@/lib/sections';
+import { NotificationsSection } from '@/components/settings/notifications-section';
 
 // Kept out of the catalogs because model names are example input, identical in every locale.
 const EXAMPLE_VISION_MODEL = 'moondream';
@@ -542,7 +544,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <h1 className="font-serif text-3xl tracking-tight">{t('title')}</h1>
           <p className="text-sm text-muted-foreground">
             {t('subtitle')}
           </p>
@@ -563,7 +565,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="grid gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
         {/* Account Section */}
         <Card>
           <CardHeader>
@@ -686,6 +688,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Body Measurements */}
+        {isSectionVisible('bodyMeasurements') && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -765,6 +768,7 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Color Preferences */}
         <Card>
@@ -1016,6 +1020,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* AI Endpoints */}
+        {isSectionVisible('aiEndpoints') && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1246,6 +1251,10 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        )}
+
+        {/* Fork: notifications moved here from their own page. */}
+        <NotificationsSection />
       </div>
     </div>
   );

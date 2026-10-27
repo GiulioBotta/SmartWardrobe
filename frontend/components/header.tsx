@@ -1,6 +1,6 @@
 'use client';
 
-import { Menu, Moon, Sun, LogOut } from 'lucide-react';
+import { Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { signOut } from 'next-auth/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -9,12 +9,11 @@ import { useAuth } from '@/lib/hooks/use-auth';
 import { useAuthConfig } from '@/lib/hooks/use-auth-config';
 import { useTranslations } from 'next-intl';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import Link from 'next/link';
+import { LogoMark } from '@/components/brand/logo-mark';
+import { APP_NAME } from '@/lib/brand';
 
-interface HeaderProps {
-  onMenuClick?: () => void;
-}
-
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
   const authConfig = useAuthConfig();
@@ -48,17 +47,12 @@ export function Header({ onMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b bg-background px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
-      <button
-        type="button"
-        className="-m-2.5 p-2.5 text-muted-foreground lg:hidden"
-        onClick={onMenuClick}
-      >
-        <span className="sr-only">{t('openSidebar')}</span>
-        <Menu className="h-6 w-6" aria-hidden="true" />
-      </button>
-
-      <div className="h-6 w-px bg-border lg:hidden" aria-hidden="true" />
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b bg-background/95 px-4 backdrop-blur sm:gap-x-6 sm:px-6 lg:px-8">
+      {/* Fork: on the phone the brand sits here; the menu is the bottom bar. */}
+      <Link href="/dashboard" className="flex items-center gap-2 lg:hidden">
+        <LogoMark size={28} />
+        <span className="font-serif text-xl tracking-tight">{APP_NAME}</span>
+      </Link>
 
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         <div className="flex flex-1" />

@@ -6,6 +6,8 @@ import {
   groupBySlot,
   logWornToday,
   outfitsToRepeat,
+  pendingForToday,
+  skipSuggestion,
   slotOf,
   wearSuggestionToday,
   wornToday,
@@ -114,5 +116,31 @@ describe('ItemPickerGrid', () => {
     expect(onToggle).toHaveBeenCalledWith('s')
     const pressed = screen.getAllByTestId('today-item').filter((b) => b.getAttribute('aria-pressed') === 'true')
     expect(pressed).toHaveLength(1)
+  })
+})
+
+describe('the home\'s pending scheduled outfit', () => {
+  const today = '2026-10-27'
+  const scheduled = (id: string, extra: Partial<Outfit>) =>
+    outfit(id, ['1'], null, { source: 'scheduled', status: 'pending', scheduled_for: today, ...extra } as Partial<Outfit>)
+
+  it('is today\'s unanswered outfit from the daily notifications', () => {
+    const outfits = [
+      scheduled('yesterday', { scheduled_for: '2026-10-26' }),
+      scheduled('accepted', { status: 'accepted' }),
+      scheduled('on-demand', { source: 'on_demand' }),
+      scheduled('worn', { feedback: { worn_at: today, actually_worn: null } } as Partial<Outfit>),
+      scheduled('sent', { status: 'sent' }),
+      scheduled('pending', {}),
+    ]
+    expect(pendingForToday(outfits, today)?.id).toBe('sent')
+    expect(pendingForToday(outfits.slice(0, 4), today)).toBeNull()
+  })
+
+  it('is skipped, not rejected, so its pieces stay in later suggestions', async () => {
+    vi.mocked(global.fetch).mockReset()
+    vi.mocked(global.fetch).mockImplementation(() => Promise.resolve(new Response('{}', { status: 200 })))
+    await skipSuggestion('o1')
+    expect(vi.mocked(global.fetch).mock.calls[0][0]).toBe('/api/v1/outfits/o1/skip')
   })
 })

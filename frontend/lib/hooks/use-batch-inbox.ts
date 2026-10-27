@@ -3,8 +3,6 @@
 // Fork: React Query hooks for the batch upload review inbox.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { Inbox } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { batchApi, type BatchDetail } from '@/lib/batch-inbox';
 import { queryKeys } from '@/lib/hooks/query-keys';
 import { useFeatures } from '@/lib/hooks/use-features';
@@ -68,9 +66,3 @@ export function useInboxAction<TArgs, TResult extends BatchDetail>(
   });
 }
 
-/** The sidebar entry, or null while the feature is off. */
-export function useInboxNavItem() {
-  const t = useTranslations('batchInbox');
-  if (!useBatchUploadEnabled()) return null;
-  return { name: t('nav'), href: '/dashboard/inbox', icon: Inbox };
-}

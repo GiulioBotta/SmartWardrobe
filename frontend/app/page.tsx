@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
+import { LogoMark } from '@/components/brand/logo-mark';
+import { APP_NAME } from '@/lib/brand';
 
 export default async function Home() {
   const t = await getTranslations('auth');
@@ -8,10 +10,10 @@ export default async function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="text-center">
         <div className="flex justify-center mb-6">
-          <img src="/logo.svg" alt={t('brandName')} className="h-20 w-20" />
+          <LogoMark size={80} />
         </div>
-        <h1 className="text-4xl font-bold tracking-tight mb-4">
-          {t('brandName')}
+        <h1 className="font-serif text-4xl tracking-tight mb-4">
+          {APP_NAME}
         </h1>
         <p className="text-muted-foreground mb-8">
           {t('tagline')}

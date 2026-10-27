@@ -28,6 +28,9 @@ import { cn, formatDateKey, formatShortDate, parseDateString } from '@/lib/utils
 import { useOccasionsMatching } from '@/lib/hooks/use-translated-constants';
 import { useUserToday } from '@/lib/hooks/use-user';
 import { GRID_PAGE_SIZE } from '@/lib/pagination';
+import { isSectionVisible } from '@/lib/sections';
+import { OutfitsTabs } from '@/components/outfits/outfits-tabs';
+import { HistoryView } from '@/components/outfits/history-view';
 
 interface MonthRef {
   year: number;
@@ -86,7 +89,7 @@ const CHIP_ORDER: FilterChip[] = [
   'pairings',
   'replacements',
   'ai',
-];
+].filter((chip) => chip !== 'pairings' || isSectionVisible('pairings')) as FilterChip[];
 
 const CHIP_KEYS: Record<FilterChip, string> = {
   all: 'filters.all',
@@ -401,7 +404,7 @@ function OutfitsPageContent() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <h1 className="font-serif text-3xl tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -656,7 +659,7 @@ export default function OutfitsPage() {
         </div>
       }
     >
-      <OutfitsPageContent />
+      <OutfitsTabs looks={<OutfitsPageContent />} history={<HistoryView />} />
     </Suspense>
   );
 }

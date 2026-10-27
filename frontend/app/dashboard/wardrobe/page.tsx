@@ -99,19 +99,19 @@ function ItemCard({
 
   return (
     <Card
-      className={`group overflow-hidden cursor-pointer transition-all ${
-        selected ? 'ring-2 ring-primary shadow-md' : 'hover:shadow-md'
+      className={`group overflow-hidden cursor-pointer border-transparent bg-transparent shadow-none transition-all ${
+        selected ? 'ring-2 ring-brand' : 'hover:-translate-y-0.5'
       }`}
       onClick={onClick}
     >
-      <div className="relative aspect-square bg-muted">
+      <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-secondary">
         {item.thumbnail_url ? (
           <Image
             src={item.thumbnail_url}
             alt={item.name || typeLabel(item.type)}
             fill
             className="object-cover"
-            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
@@ -243,13 +243,13 @@ function ItemCard({
           </div>
         )}
       </div>
-      <CardContent className="p-3">
+      <CardContent className="px-1 pb-2 pt-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="font-medium text-sm truncate">
+            <p className="font-serif text-[0.95rem] leading-snug truncate">
               {item.name || typeLabel(item.type)}
             </p>
-            <p className="text-xs text-muted-foreground capitalize">
+            <p className="label-caps truncate">
               {typeLabel(item.type)}
               {item.subtype && ` • ${subtypeLabel(item.subtype)}`}
               {item.tags?.logprobs_confidence != null && ` · ${t('ai.confident', { percent: Math.round(item.tags.logprobs_confidence * 100) })}`}
@@ -292,9 +292,9 @@ function ItemCard({
 
 function ItemCardSkeleton() {
   return (
-    <Card className="overflow-hidden">
-      <Skeleton className="aspect-square" />
-      <CardContent className="p-3">
+    <Card className="overflow-hidden border-transparent bg-transparent shadow-none">
+      <Skeleton className="aspect-[4/5] rounded-xl" />
+      <CardContent className="px-1 pb-2 pt-2">
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-3 w-1/2 mt-1" />
       </CardContent>
@@ -662,7 +662,7 @@ export default function WardrobePage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center justify-between sm:justify-start gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <h1 className="font-serif text-3xl tracking-tight">{t('title')}</h1>
             <Button onClick={() => setAddDialogOpen(true)} className="sm:hidden" size="sm">
               <Plus className="h-4 w-4" />
             </Button>
@@ -875,7 +875,7 @@ export default function WardrobePage() {
           </Button>
         </div>
       ) : isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
             <ItemCardSkeleton key={i} />
           ))}
@@ -904,7 +904,7 @@ export default function WardrobePage() {
           <EmptyWardrobe onAddClick={() => setAddDialogOpen(true)} />
         )
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 pb-20">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 pb-20 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {items.map((item) => {
             // Determine if item is selected based on selection mode
             const isSelected = selection.mode === 'all'

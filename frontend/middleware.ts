@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getToken, type JWT } from 'next-auth/jwt';
 import { decodeProxyHeader, proxySecretMatches } from '@/lib/proxy-headers';
 import { clearSessionCookies, sessionCookie } from '@/lib/session-cookies';
+import { legacyRedirect } from '@/lib/legacy-routes';
 
 // A proxy that switches users keeps the old NextAuth session cookie, and a GET to
 // /api/auth/signout only renders a confirmation page, so the session is ended here.
@@ -52,6 +53,9 @@ export async function middleware(request: NextRequest) {
     if (request.nextUrl.searchParams.get('loggedOut') === '1') clearSessionCookies(request, response);
     return response;
   }
+  // Fork: pages moved or hidden by the Wearly redesign. The new address goes through here again.
+  const moved = legacyRedirect(pathname);
+  if (moved) return NextResponse.redirect(new URL(moved, request.url));
   const action = nextAuthAction(pathname);
   // Every other NextAuth action, sign-in included, has to work for the new proxy user.
   if (action !== null && action !== 'session') return NextResponse.next();

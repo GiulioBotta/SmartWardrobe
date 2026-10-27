@@ -1,5 +1,7 @@
 'use client';
 
+import { PageHeader } from '@/components/brand/page-header';
+import { WeeklySummaryCard } from '@/components/legacy/weekly-summary-card';
 import {
   Shirt,
   Sparkles,
@@ -158,10 +160,7 @@ export default function AnalyticsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground">{t('subtitle')}</p>
-        </div>
+        <PageHeader title={t('title')} subtitle={t('subtitle')} />
         <LoadingSkeleton />
       </div>
     );
@@ -179,10 +178,10 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('subtitle')}</p>
-      </div>
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+
+      {/* Fork: the weekly summary moved here from the old dashboard. */}
+      <WeeklySummaryCard />
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

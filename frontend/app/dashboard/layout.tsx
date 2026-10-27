@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Sidebar } from '@/components/sidebar';
-import { MobileSidebar } from '@/components/mobile-sidebar';
 import { MobileNav } from '@/components/mobile-nav';
 import { Header } from '@/components/header';
 import { OfflineIndicator } from '@/components/offline-indicator';
@@ -20,7 +19,6 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const t = useTranslations('dashboard');
 
   const { user, isAuthenticated, isLoading, error } = useAuth();
@@ -58,9 +56,8 @@ export default function DashboardLayout({
     <LightboxProvider>
       <div className="min-h-screen bg-background">
         <Sidebar />
-        <MobileSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="lg:pl-72">
-          <Header onMenuClick={() => setSidebarOpen(true)} />
+          <Header />
           <main className="py-6 px-4 sm:px-6 lg:px-8 pb-20 lg:pb-6 overflow-x-hidden">
             {children}
           </main>

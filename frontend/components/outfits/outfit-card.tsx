@@ -183,7 +183,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
           )}
         </div>
         <div className="p-3 space-y-1">
-          <h3 className="text-sm font-semibold leading-tight truncate">
+          <h3 className="font-serif text-base leading-tight truncate">
             {getTitle(outfit)}
           </h3>
           <div className="flex items-center justify-between text-xs text-muted-foreground">

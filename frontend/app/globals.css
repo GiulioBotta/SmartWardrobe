@@ -3,49 +3,57 @@
 @tailwind utilities;
 
 @layer base {
+  /* Wearly: "Caffè e crema" with a warm moka accent (docs/superpowers/specs/2026-10-27-wearly-redesign-design.md).
+     --accent is shadcn's hover surface; the brand colour is --brand. */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 220.9 39.3% 11%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 220.9 39.3% 11%;
+    --background: 35.3 54.8% 93.9%;
+    --foreground: 22.2 29.7% 17.8%;
+    --card: 35.3 54.8% 93.9%;
+    --card-foreground: 22.2 29.7% 17.8%;
+    --popover: 35.3 54.8% 93.9%;
+    --popover-foreground: 22.2 29.7% 17.8%;
+    --primary: 22.2 29.7% 17.8%;
+    --primary-foreground: 35.3 54.8% 93.9%;
+    --secondary: 34.3 46.7% 88.2%;
+    --secondary-foreground: 22.2 29.7% 17.8%;
+    --muted: 34.3 46.7% 88.2%;
+    /* #8a6a52 in the mockups, darkened to reach WCAG AA on the beige surfaces. */
+    --muted-foreground: 25.7 26.2% 36.7%;
+    --accent: 34.3 46.7% 88.2%;
+    --accent-foreground: 22.2 29.7% 17.8%;
+    --brand: 23.5 21.7% 46.1%;
+    --brand-foreground: 35.3 54.8% 93.9%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 224 71.4% 4.1%;
-    --radius: 0.5rem;
+    --border: 31.6 32.8% 77.3%;
+    --input: 31.6 32.8% 77.3%;
+    --ring: 23.5 21.7% 46.1%;
+    --radius: 0.75rem;
   }
 
+  /* The same coffee with the lights off. */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 20 26.3% 11.2%;
+    --foreground: 33.6 51% 90.4%;
+    --card: 20 26.3% 11.2%;
+    --card-foreground: 33.6 51% 90.4%;
+    --popover: 20 26.3% 11.2%;
+    --popover-foreground: 33.6 51% 90.4%;
+    --primary: 33.6 51% 90.4%;
+    --primary-foreground: 20 26.3% 11.2%;
+    --secondary: 16.7 22% 16.1%;
+    --secondary-foreground: 33.6 51% 90.4%;
+    --muted: 16.7 22% 16.1%;
+    --muted-foreground: 26.8 24.1% 61.8%;
+    --accent: 16.7 22% 16.1%;
+    --accent-foreground: 33.6 51% 90.4%;
+    --brand: 25.3 36.3% 69.2%;
+    --brand-foreground: 20 26.3% 11.2%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --border: 23.1 21.3% 23.9%;
+    --input: 23.1 21.3% 23.9%;
+    --ring: 25.3 36.3% 69.2%;
   }
 }
 
@@ -57,6 +65,13 @@
     @apply bg-background text-foreground;
     overflow-x: hidden;
     max-width: 100vw;
+  }
+}
+
+@layer components {
+  /* Small details (brand, material, labels) in spaced small capitals, as in a fashion magazine. */
+  .label-caps {
+    @apply text-[0.68rem] font-medium uppercase tracking-[0.12em] text-muted-foreground;
   }
 }
 

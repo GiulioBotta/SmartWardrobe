@@ -17,6 +17,8 @@ module.exports = {
     },
     extend: {
       fontFamily: {
+        // Wearly titles: Gelasio has Georgia's metrics, the serif chosen in the mockups.
+        serif: ['var(--font-serif)', 'Georgia', 'Times New Roman', 'serif'],
         // Inter carries no CJK glyphs, so zh/ja/ko fall through to fonts shipped with the OS.
         // Bundling Noto CJK instead would add megabytes and make the Docker build depend on
         // reaching Google Fonts, which a self-hosted build cannot assume.
@@ -50,6 +52,10 @@ module.exports = {
         ],
       },
       colors: {
+        brand: {
+          DEFAULT: 'hsl(var(--brand))',
+          foreground: 'hsl(var(--brand-foreground))',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

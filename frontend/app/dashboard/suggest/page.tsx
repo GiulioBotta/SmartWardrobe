@@ -301,11 +301,11 @@ function OutfitCard({
   const tLog = useTranslations('quickLog');
   return (
     <Card className="overflow-hidden flex flex-col h-full">
-      <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4 border-b">
+      <div className="bg-secondary p-4 border-b">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Sparkles className="h-5 w-5 text-primary flex-shrink-0" />
-            <h3 className="font-semibold text-base truncate">
+            <h3 className="font-serif text-lg truncate">
               {outfit.reasoning || (badgeLabel ?? t('yourOutfit'))}
             </h3>
           </div>
@@ -781,7 +781,7 @@ function SuggestContent() {
     >
       {/* Page header with greeting */}
       <div className="text-center space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">{t(getGreetingKey())}</h1>
+        <h1 className="font-serif text-3xl tracking-tight">{t(getGreetingKey())}</h1>
         <p className="text-muted-foreground">
           {t('subtitle')}
         </p>

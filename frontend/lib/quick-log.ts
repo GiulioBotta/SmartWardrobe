@@ -109,3 +109,26 @@ export function logWornToday(itemIds: string[], occasion: string, today: string)
     mark_worn: true,
   });
 }
+
+const UNANSWERED = new Set(['pending', 'sent', 'viewed']);
+
+/**
+ * The outfit the daily notification proposed for today, while it is still unanswered. Looks the
+ * user generated on the suggestion page are left out: those are answered there.
+ */
+export function pendingForToday(outfits: readonly Outfit[], today: string): Outfit | null {
+  return (
+    outfits.find(
+      (o) =>
+        o.source === 'scheduled' &&
+        o.scheduled_for === today &&
+        UNANSWERED.has(o.status) &&
+        !o.feedback?.worn_at,
+    ) ?? null
+  );
+}
+
+/** Set a proposed look aside. Skip, not reject: rejecting keeps its pieces out of later suggestions. */
+export async function skipSuggestion(outfitId: string): Promise<void> {
+  await api.post(`/outfits/${outfitId}/skip`);
+}

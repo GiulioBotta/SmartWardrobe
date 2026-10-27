@@ -1,654 +1,236 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useSession } from 'next-auth/react';
+// Fork: Wearly's home, "Oggi". Replaces the upstream dashboard: what are you wearing today (a
+// suggestion, pieces picked by hand, a recent look again, or the daily notification's proposal),
+// what you wore lately, and photos waiting for review. The upstream cards it dropped live on in
+// components/legacy (Settings › Notifiche and Analisi).
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CalendarCheck, Loader2, Repeat, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Shirt,
-  Sparkles,
-  Plus,
-  TrendingUp,
-  Cloud,
-  Droplets,
-  ThumbsUp,
-  ThumbsDown,
-  Clock,
-  Bell,
-  BellOff,
-  Calendar,
-  CheckCircle2,
-  XCircle,
-  Lightbulb,
-  ChevronRight,
-  HeartHandshake,
-  Users,
-} from 'lucide-react';
-import Link from 'next/link';
-import { TodayLogCard } from '@/components/today/today-log-card';
-import Image from 'next/image';
-import { useAnalytics } from '@/lib/hooks/use-analytics';
-import { useAnalyticsInsightLines } from '@/lib/hooks/use-insight-text';
-import { useWeather } from '@/lib/hooks/use-weather';
-import { usePreferences } from '@/lib/hooks/use-preferences';
-import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
-import { displayValue, tempSymbol, TempUnit } from '@/lib/temperature';
-import { usePendingOutfits, useAcceptOutfit, useRejectOutfit } from '@/lib/hooks/use-outfits';
-import { useSchedules, useNotificationSettings } from '@/lib/hooks/use-notifications';
-import { useFamily } from '@/lib/hooks/use-family';
 import { toast } from 'sonner';
-import { formatShortDate } from '@/lib/utils';
-import { findNextSchedule } from '@/lib/schedules';
-import { useUserTimezone } from '@/lib/hooks/use-user';
+import { OccasionChips } from '@/components/shared/occasion-chips';
+import { Greeting } from '@/components/today/greeting';
+import { InboxReminder } from '@/components/today/inbox-reminder';
+import { ItemPickerGrid } from '@/components/today/item-picker-grid';
+import { OutfitStrip } from '@/components/today/outfit-strip';
+import { TodayBox } from '@/components/today/today-box';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { getErrorMessage } from '@/lib/api';
+import { invalidateEveryItemWearCache } from '@/lib/hooks/cache-invalidation';
+import { queryKeys } from '@/lib/hooks/query-keys';
+import { useItemPages } from '@/lib/hooks/use-items';
+import { useOutfits } from '@/lib/hooks/use-outfits';
+import { usePreferences } from '@/lib/hooks/use-preferences';
+import { useOccasionLabel } from '@/lib/hooks/use-translated-constants';
+import { useUserToday } from '@/lib/hooks/use-user';
+import {
+  daysAgo,
+  groupBySlot,
+  logWornToday,
+  outfitsToRepeat,
+  pendingForToday,
+  skipSuggestion,
+  wearSuggestionToday,
+  wornOn,
+  wornToday,
+} from '@/lib/quick-log';
+import type { Outfit } from '@/lib/types';
 
-function WeatherCard() {
-  const { data: weather, isLoading, isError } = useWeather();
-  const { data: prefs } = usePreferences();
-  const t = useTranslations('dashboard');
-  const conditionLabel = useWeatherConditionLabel();
-  const unit: TempUnit = prefs?.temperature_unit === 'fahrenheit' ? 'fahrenheit' : 'celsius';
+const REPEAT_WINDOW_DAYS = 14;
+const ITEM_PAGE_SIZE = 100;
+// Up to 500 pieces; the grid is for picking, not for browsing a huge wardrobe.
+const MAX_ITEM_PAGES = 5;
+const RECENT_LOOKS = 3;
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Cloud className="h-4 w-4" />
-            {t('weather.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-12 w-24 mb-2" />
-          <Skeleton className="h-4 w-32" />
-        </CardContent>
-      </Card>
-    );
-  }
+type Mode = 'none' | 'pick' | 'repeat';
 
-  if (isError || !weather) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Cloud className="h-4 w-4" />
-            {t('weather.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-3">
-            {t('weather.locationNotSet')}
-          </p>
-          <Button size="sm" variant="outline" asChild>
-            <Link href="/dashboard/settings">{t('weather.setLocation')}</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Cloud className="h-4 w-4" />
-          {t('weather.title')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-baseline gap-2 mb-1">
-          <span className="text-3xl font-bold">{displayValue(weather.temperature, unit)}{tempSymbol(unit)}</span>
-          <span className="text-muted-foreground text-sm">
-            {t('weather.feelsLike', { temp: `${displayValue(weather.feels_like, unit)}°` })}
-          </span>
-        </div>
-        <p className="text-sm text-muted-foreground mb-1">
-          {conditionLabel(weather.condition)}
-        </p>
-        {weather.precipitation_chance > 0 && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Droplets className="h-3 w-3" />
-            {t('weather.rainChance', { percent: weather.precipitation_chance })}
-          </p>
-        )}
-        <Button size="sm" className="w-full mt-3" asChild>
-          <Link href="/dashboard/suggest">
-            <Sparkles className="h-4 w-4 mr-1" />
-            {t('weather.getOutfitSuggestion')}
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PendingOutfitsCard() {
-  const typeLabel = useTypeLabel();
-  const { data, isLoading } = usePendingOutfits(2);
-  const acceptOutfit = useAcceptOutfit();
-  const rejectOutfit = useRejectOutfit();
-  const t = useTranslations('dashboard');
-  const tc = useTranslations('common');
-  const occasionLabel = useOccasionLabel();
+export default function TodayHome() {
+  const t = useTranslations('wearly.today');
+  const tLog = useTranslations('quickLog');
   const locale = useLocale();
+  const occasionLabel = useOccasionLabel();
+  const queryClient = useQueryClient();
+  const today = useUserToday()();
+  const { data: prefs } = usePreferences();
+  const [mode, setMode] = useState<Mode>('none');
+  const sectionRef = useRef<HTMLElement>(null);
 
-  const handleAccept = async (id: string) => {
-    try {
-      await acceptOutfit.mutateAsync(id);
-      toast.success(t('pendingOutfits.accepted'));
-    } catch {
-      toast.error(t('pendingOutfits.acceptFailed'));
-    }
+  const { data: outfitList, isLoading: outfitsLoading } = useOutfits(
+    { date_from: daysAgo(today, REPEAT_WINDOW_DAYS), date_to: today },
+    1,
+    100,
+  );
+  const [pageCount, setPageCount] = useState(1);
+  const picking = mode === 'pick';
+  const { items, hasMore, isLoading: itemsLoading, isFetching } = useItemPages({}, picking ? pageCount : 0, ITEM_PAGE_SIZE);
+  useEffect(() => {
+    if (picking && hasMore && !isFetching && pageCount < MAX_ITEM_PAGES) setPageCount((n) => n + 1);
+  }, [picking, hasMore, isFetching, pageCount]);
+
+  const outfits = useMemo(() => outfitList?.outfits ?? [], [outfitList]);
+  const loggedToday = wornToday(outfits, today);
+  const pending = pendingForToday(outfits, today);
+  const toRepeat = outfitsToRepeat(outfits, today);
+  const groups = useMemo(() => groupBySlot(items), [items]);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [occasion, setOccasion] = useState<string | null>(null);
+  const chosenOccasion = occasion ?? prefs?.default_occasion ?? 'casual';
+
+  const refreshWearCaches = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.pendingOutfits.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.analytics.all });
+    invalidateEveryItemWearCache(queryClient);
   };
 
-  const handleReject = async (id: string) => {
-    try {
-      await rejectOutfit.mutateAsync(id);
-      toast.success(t('pendingOutfits.dismissed'));
-    } catch {
-      toast.error(t('pendingOutfits.dismissFailed'));
-    }
+  const log = useMutation({
+    mutationFn: (args: { itemIds: string[]; occasion: string }) => logWornToday(args.itemIds, args.occasion, today),
+    onSuccess: () => {
+      toast.success(tLog('wornLogged'));
+      setSelected(new Set());
+      setMode('none');
+      refreshWearCaches();
+    },
+    onError: (error) => toast.error(getErrorMessage(error, tLog('wornFailed'))),
+  });
+  const answer = useMutation({
+    mutationFn: ({ outfit, wear }: { outfit: Outfit; wear: boolean }) =>
+      wear ? wearSuggestionToday(outfit.id) : skipSuggestion(outfit.id),
+    onSuccess: (_, { wear }) => {
+      if (wear) toast.success(tLog('wornLogged'));
+      refreshWearCaches();
+    },
+    onError: (error) => toast.error(getErrorMessage(error, tLog('wornFailed'))),
+  });
+
+  const open = (next: Mode) => {
+    setMode(next);
+    // Let the section render, then bring it into view on a phone.
+    requestAnimationFrame(() => sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            {t('pendingOutfits.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-16 w-full mb-2" />
-          <Skeleton className="h-16 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
+  const toggle = (itemId: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
 
-  const pendingOutfits = data?.outfits || [];
-
-  if (pendingOutfits.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            {t('pendingOutfits.allCaughtUp')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            {t('pendingOutfits.noPending')}
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const dayLabel = (day: string) =>
+    new Date(`${day}T12:00:00`).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="h-4 w-4 text-orange-500" />
-            {t('pendingOutfits.title')}
-            <Badge variant="secondary" className="ml-1">{data?.total || pendingOutfits.length}</Badge>
-          </CardTitle>
-          {(data?.total ?? 0) > 2 && (
-            <Link href="/dashboard/history" className="text-xs text-muted-foreground hover:text-foreground">
-              {tc('viewAll')}
-            </Link>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {pendingOutfits.map((outfit) => (
-          <div key={outfit.id} className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {outfit.items.slice(0, 3).map((item) => (
-                <div
-                  key={item.id}
-                  className="w-10 h-10 rounded-full bg-muted overflow-hidden relative border-2 border-background"
-                >
-                  {item.thumbnail_url ? (
-                    <Image
-                      src={item.thumbnail_url}
-                      alt={item.name || typeLabel(item.type)}
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Shirt className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  )}
+    <div className="mx-auto max-w-3xl space-y-8 pb-40 lg:pb-24">
+      <Greeting today={today} />
+
+      {outfitsLoading ? (
+        <Skeleton className="h-48 w-full rounded-2xl" />
+      ) : (
+        <TodayBox
+          loggedToday={loggedToday}
+          pending={pending}
+          busy={answer.isPending}
+          onPick={() => open('pick')}
+          onRepeat={() => open('repeat')}
+          onWear={(outfit) => answer.mutate({ outfit, wear: true })}
+          onSkip={(outfit) => answer.mutate({ outfit, wear: false })}
+        />
+      )}
+
+      {mode !== 'none' && (
+        <section ref={sectionRef} className="scroll-mt-20 space-y-3" aria-labelledby="today-mode-title">
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="today-mode-title" className="font-serif text-xl">
+              {mode === 'pick' ? t('pickTitle') : t('repeatTitle')}
+            </h2>
+            <Button variant="ghost" size="icon" onClick={() => setMode('none')} aria-label={t('close')}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          {mode === 'pick' ? (
+            <>
+              <p className="text-sm text-muted-foreground">{t('pickHint')}</p>
+              {itemsLoading ? (
+                <Skeleton className="h-48 w-full" />
+              ) : items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('noItems')}</p>
+              ) : (
+                <ItemPickerGrid groups={groups} selected={selected} onToggle={toggle} />
+              )}
+            </>
+          ) : toRepeat.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('nothingToRepeat')}</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {toRepeat.map((outfit) => (
+                <div key={outfit.id} data-testid="repeat-outfit" className="space-y-2 rounded-xl border p-3">
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate font-medium">{outfit.name || occasionLabel(outfit.occasion)}</span>
+                    <span className="label-caps shrink-0">{dayLabel(wornOn(outfit)!)}</span>
+                  </div>
+                  <OutfitStrip items={outfit.items} />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={log.isPending}
+                    onClick={() => log.mutate({ itemIds: outfit.items.map((i) => i.id), occasion: outfit.occasion })}
+                  >
+                    <Repeat className="mr-1 h-4 w-4" />
+                    {t('repeatThis')}
+                  </Button>
                 </div>
               ))}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium capitalize truncate">{occasionLabel(outfit.occasion)}</p>
-              <p className="text-xs text-muted-foreground">
-                {outfit.scheduled_for
-                  ? formatShortDate(outfit.scheduled_for, locale)
-                  : t('pendingOutfits.lookbook')}
-              </p>
-            </div>
-            <div className="flex gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                onClick={() => handleReject(outfit.id)}
-                disabled={rejectOutfit.isPending}
-                aria-label={t('pendingOutfits.dismissLabel')}
-              >
-                <ThumbsDown className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-green-500 hover:text-green-600 hover:bg-green-50"
-                onClick={() => handleAccept(outfit.id)}
-                disabled={acceptOutfit.isPending}
-              >
-                <ThumbsUp className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function NextScheduledCard() {
-  const { data: schedules, isLoading } = useSchedules();
-  const timezone = useUserTimezone();
-  const t = useTranslations('dashboard');
-  const tDays = useTranslations('notifications');
-  const occasionLabel = useOccasionLabel();
-
-  const nextSchedule = useMemo(
-    () => (schedules ? findNextSchedule(schedules, timezone) : null),
-    [schedules, timezone]
-  );
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            {t('nextScheduled.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-6 w-32 mb-1" />
-          <Skeleton className="h-4 w-24" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!nextSchedule) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            {t('nextScheduled.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-2">{t('nextScheduled.noSchedules')}</p>
-          <Button size="sm" variant="outline" asChild>
-            <Link href="/dashboard/notifications">{t('nextScheduled.setUpSchedule')}</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const { schedule, notifyDay, daysUntil } = nextSchedule;
-  const timeStr = schedule.notification_time.slice(0, 5);
-  const dayNames = [
-    tDays('days.monday'), tDays('days.tuesday'), tDays('days.wednesday'),
-    tDays('days.thursday'), tDays('days.friday'), tDays('days.saturday'),
-    tDays('days.sunday'),
-  ];
-  const dayStr = daysUntil === 0 ? t('nextScheduled.today') : daysUntil === 1 ? t('nextScheduled.tomorrow') : dayNames[notifyDay];
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Calendar className="h-4 w-4" />
-          {t('nextScheduled.title')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="font-semibold">
-          {t('nextScheduled.dayAtTime', { day: dayStr, time: timeStr })}
-        </p>
-        <p className="text-sm text-muted-foreground capitalize">
-          {t('nextScheduled.occasionOutfit', { occasion: occasionLabel(schedule.occasion) })}
-        </p>
-        {daysUntil === 0 && (
-          <Badge variant="secondary" className="mt-2">{t('nextScheduled.comingUp')}</Badge>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function NotificationStatusCard() {
-  const { data: settings, isLoading } = useNotificationSettings();
-  const t = useTranslations('dashboard');
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            {t('notifications.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-4 w-full mb-2" />
-          <Skeleton className="h-4 w-24" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const channels = settings || [];
-  const enabledChannels = channels.filter((c) => c.enabled);
-
-  if (channels.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <BellOff className="h-4 w-4 text-muted-foreground" />
-            {t('notifications.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-2">{t('notifications.noChannels')}</p>
-          <Button size="sm" variant="outline" asChild>
-            <Link href="/dashboard/notifications">{t('notifications.addChannel')}</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            {t('notifications.title')}
-          </CardTitle>
-          <Link href="/dashboard/notifications" className="text-xs text-muted-foreground hover:text-foreground">
-            {t('notifications.configure')}
-          </Link>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2">
-          {channels.map((channel) => (
-            <Badge
-              key={channel.id}
-              variant={channel.enabled ? 'default' : 'outline'}
-              className={channel.enabled ? '' : 'text-muted-foreground'}
-            >
-              {channel.enabled ? (
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-              ) : (
-                <XCircle className="h-3 w-3 mr-1" />
-              )}
-              {channel.channel}
-            </Badge>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          {t('notifications.activeCount', { active: enabledChannels.length, total: channels.length })}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function WeeklySummaryCard() {
-  const { data: analytics, isLoading } = useAnalytics();
-  const t = useTranslations('dashboard');
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            {t('weeklySummary.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-8 w-16 mb-1" />
-          <Skeleton className="h-4 w-32" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!analytics) {
-    return null;
-  }
-
-  const { wardrobe } = analytics;
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <TrendingUp className="h-4 w-4" />
-          {t('weeklySummary.title')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-2xl font-bold">{wardrobe.outfits_this_week}</p>
-            <p className="text-xs text-muted-foreground">{t('weeklySummary.outfits')}</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold">
-              {wardrobe.acceptance_rate != null ? `${wardrobe.acceptance_rate}%` : '-'}
-            </p>
-            <p className="text-xs text-muted-foreground">{t('weeklySummary.accepted')}</p>
-          </div>
-        </div>
-        {wardrobe.average_rating != null && (
-          <p className="text-xs text-muted-foreground mt-2">
-            {t('weeklySummary.avgRatingValue', { rating: wardrobe.average_rating })}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function InsightsCard() {
-  const { data: analytics, isLoading } = useAnalytics();
-  const t = useTranslations('dashboard');
-  const tc = useTranslations('common');
-  const insights = useAnalyticsInsightLines(analytics);
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5" />
-            {t('insights.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5" />
-            {t('insights.title')}
-          </CardTitle>
-          {insights.length > 3 && (
-            <Link href="/dashboard/analytics" className="text-sm text-muted-foreground hover:text-foreground flex items-center">
-              {tc('viewAll')} <ChevronRight className="h-4 w-4" />
-            </Link>
           )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {insights.length > 0 ? (
-          <ul className="space-y-2 text-sm">
-            {insights.slice(0, 3).map((insight, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary mt-2 flex-shrink-0" />
-                <span className="text-muted-foreground">{insight}</span>
-              </li>
+        </section>
+      )}
+
+      {mode === 'none' && toRepeat.length > 0 && (
+        <section className="space-y-3" aria-labelledby="today-recent-title">
+          <h2 id="today-recent-title" className="label-caps">{t('recentTitle')}</h2>
+          <div className="space-y-3">
+            {toRepeat.slice(0, RECENT_LOOKS).map((outfit) => (
+              <div key={outfit.id} className="flex items-center gap-3">
+                <span className="label-caps w-20 shrink-0">{dayLabel(wornOn(outfit)!)}</span>
+                <OutfitStrip items={outfit.items} />
+              </div>
             ))}
-          </ul>
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            {t('insights.empty')}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+          </div>
+        </section>
+      )}
 
-function FamilyFeedCard() {
-  const { data: family, isLoading } = useFamily();
-  const t = useTranslations('dashboard');
+      <InboxReminder />
 
-  if (isLoading) return null;
-
-  // Don't show if user has no family
-  if (!family) return null;
-
-  const memberCount = family.members.length;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <HeartHandshake className="h-5 w-5" />
-          {t('familyFeed.title')}
-        </CardTitle>
-        <CardDescription>
-          {t('familyFeed.description')}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Users className="h-4 w-4" />
-          <span>{t('familyFeed.memberCount', { count: memberCount, name: family.name })}</span>
+      {picking && selected.size > 0 && (
+        // Above the mobile bottom navigation (h-16), flush with the bottom next to the sidebar.
+        <div className="fixed inset-x-0 bottom-16 z-40 border-t bg-card p-3 shadow-lg lg:bottom-0 lg:left-72">
+          <div className="mx-auto max-w-5xl space-y-2">
+            {/* One scrolling row, so the bar does not cover half the grid on a phone. */}
+            <div className="-mx-3 overflow-x-auto px-3 pb-1 [&>div]:flex-nowrap [&_button]:shrink-0">
+              <OccasionChips selected={chosenOccasion} onSelect={setOccasion} extraOccasions={[prefs?.default_occasion]} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="mr-auto text-sm font-medium">{tLog('selected', { count: selected.size })}</span>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} aria-label={tLog('clear')}>
+                <X className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                disabled={log.isPending}
+                onClick={() => log.mutate({ itemIds: Array.from(selected), occasion: chosenOccasion })}
+              >
+                {log.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CalendarCheck className="mr-1 h-4 w-4" />}
+                {tLog('save')}
+              </Button>
+            </div>
+          </div>
         </div>
-        <Button asChild className="w-full">
-          <Link href="/dashboard/family/feed">
-            {t('familyFeed.browse')}
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function QuickActionsCard() {
-  const t = useTranslations('dashboard');
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('quickActions.title')}</CardTitle>
-        <CardDescription>{t('quickActions.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <Button asChild className="w-full justify-start">
-          <Link href="/dashboard/wardrobe">
-            <Plus className="mr-2 h-4 w-4" />
-            {t('quickActions.addNewItem')}
-          </Link>
-        </Button>
-        <Button asChild variant="outline" className="w-full justify-start">
-          <Link href="/dashboard/suggest">
-            <Sparkles className="mr-2 h-4 w-4" />
-            {t('quickActions.getOutfitSuggestion')}
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function DashboardPage() {
-  const { data: session } = useSession();
-  const t = useTranslations('dashboard');
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {t('welcomeBack', { name: session?.user?.name?.split(' ')[0] || t('userFallback') })}
-        </h1>
-        <p className="text-muted-foreground">
-          {t('subtitle')}
-        </p>
-      </div>
-
-      {/* Fork: quick wear log */}
-      <TodayLogCard />
-
-      {/* Top row - Weather + Pending + Next Scheduled */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <WeatherCard />
-        <PendingOutfitsCard />
-        <NextScheduledCard />
-      </div>
-
-      {/* Second row - Weekly Summary + Notification Status */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <WeeklySummaryCard />
-        <NotificationStatusCard />
-      </div>
-
-      {/* Third row - Quick Actions + Insights */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <QuickActionsCard />
-        <InsightsCard />
-      </div>
-
-      {/* Family feed card */}
-      <FamilyFeedCard />
+      )}
     </div>
   );
 }

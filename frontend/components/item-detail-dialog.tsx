@@ -82,6 +82,7 @@ import { GeneratePairingsDialog } from '@/components/generate-pairings-dialog';
 import { useFeatures } from '@/lib/hooks/use-features';
 import { useLocale, useTranslations } from 'next-intl';
 import { formatDate } from '@/lib/utils';
+import { isSectionVisible } from '@/lib/sections';
 
 interface ItemDetailDialogProps {
   item: Item | null;
@@ -335,7 +336,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                 no cap at all from sm up: because a flex item claims its content
                 width before a flex-1 sibling does, a long name squeezed the
                 actions row and pushed edit and replace-image out of view. */}
-            <DialogTitle className="text-xl min-w-0 truncate max-w-[45%] sm:max-w-none sm:flex-1">
+            <DialogTitle className="font-serif text-2xl font-normal min-w-0 truncate max-w-[45%] sm:max-w-none sm:flex-1">
               {item.name || (typeInfo ? typeInfo.label : item.type)}
             </DialogTitle>
             {/* The action row scrolls sideways once it stops fitting, because
@@ -357,15 +358,17 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     }`}
                   />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowPairingsDialog(true)}
-                  disabled={item.status !== 'ready'}
-                  title={t('titles.findMatchingOutfits')}
-                >
-                  <Layers className="h-5 w-5" />
-                </Button>
+                {isSectionVisible('pairings') && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowPairingsDialog(true)}
+                    disabled={item.status !== 'ready'}
+                    title={t('titles.findMatchingOutfits')}
+                  >
+                    <Layers className="h-5 w-5" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1109,11 +1112,13 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
       </AlertDialog>
 
       {/* Generate Pairings Dialog */}
-      <GeneratePairingsDialog
-        item={item}
-        open={showPairingsDialog}
-        onOpenChange={setShowPairingsDialog}
-      />
+      {isSectionVisible('pairings') && (
+        <GeneratePairingsDialog
+          item={item}
+          open={showPairingsDialog}
+          onOpenChange={setShowPairingsDialog}
+        />
+      )}
     </>
   );
 }

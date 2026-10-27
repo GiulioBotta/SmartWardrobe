@@ -2,7 +2,8 @@ import { render, screen } from '@testing-library/react'
 import type { ComponentType } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import AnalyticsPage from '@/app/dashboard/analytics/page'
-import DashboardPage from '@/app/dashboard/page'
+// Fork: the weekly summary moved from the dashboard (replaced by the "Oggi" home) to its own card.
+import { WeeklySummaryCard } from '@/components/legacy/weekly-summary-card'
 import LearningPage from '@/app/dashboard/learning/page'
 import { useAnalytics } from '@/lib/hooks/use-analytics'
 import { useLearning } from '@/lib/hooks/use-learning'
@@ -109,8 +110,8 @@ const rows: Row[] = [
     noData: ['stats.totalWears.noData', 'stats.totalWears.description'],
   },
   {
-    page: 'dashboard',
-    Page: DashboardPage,
+    page: 'weekly summary card',
+    Page: WeeklySummaryCard,
     setup: setAnalytics,
     hasData: ['weeklySummary.avgRatingValue'],
     noData: [],
@@ -137,9 +138,9 @@ describe('zero acceptance rate and rating', () => {
     noData.forEach((key) => expect(screen.queryByText(key)).not.toBeInTheDocument())
   })
 
-  it('dashboard weekly summary shows 0% and not a dash or a bare 0', () => {
+  it('weekly summary shows 0% and not a dash or a bare 0', () => {
     setAnalytics(0, 0)
-    render(<DashboardPage />)
+    render(<WeeklySummaryCard />)
 
     expect(screen.getByText('0%')).toBeInTheDocument()
     expect(screen.queryByText('0')).not.toBeInTheDocument()

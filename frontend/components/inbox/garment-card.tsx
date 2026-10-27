@@ -95,7 +95,7 @@ export function GarmentCard({
       </div>
       <CardContent className="space-y-2 p-3">
         <div>
-          <p className="truncate font-medium" title={title}>{title}</p>
+          <p className="truncate font-serif text-[0.95rem]" title={title}>{title}</p>
           {tags.brand && <p className="truncate text-sm text-muted-foreground">{tags.brand}</p>}
           {failed && primary.error && (
             <p className="line-clamp-2 text-xs text-destructive" title={primary.error}>{primary.error}</p>
