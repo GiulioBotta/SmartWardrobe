@@ -19,6 +19,7 @@ os.environ.pop("AI_REQUESTS_PER_MINUTE", None)
 os.environ.pop("AI_REQUESTS_PER_DAY", None)
 os.environ.pop("AI_RATE_LIMIT_MAX_WAIT_SECONDS", None)
 os.environ.pop("AI_REASONING_EFFORT", None)
+os.environ.pop("EMBEDDINGS_ENABLED", None)
 
 from collections.abc import AsyncGenerator
 from typing import Any

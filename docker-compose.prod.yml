@@ -37,6 +37,7 @@ x-backend-env: &backend-env
   AUTO_REMOVE_BACKGROUND_COLOR: ${AUTO_REMOVE_BACKGROUND_COLOR:-#FFFFFF}
   SUGGESTION_COMBOS_ENABLED: ${SUGGESTION_COMBOS_ENABLED:-false}
   SUGGESTION_TOP_COMBOS: ${SUGGESTION_TOP_COMBOS:-15}
+  EMBEDDINGS_ENABLED: ${EMBEDDINGS_ENABLED:-false}
   MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-}
   MAX_BULK_ACTION_COUNT: ${MAX_BULK_ACTION_COUNT:-}
   NTFY_SERVER: ${NTFY_SERVER:-}
@@ -52,7 +53,9 @@ x-backend-env: &backend-env
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    # postgres:15-alpine + pgvector (docker/postgres/Dockerfile) for item embeddings.
+    image: smartwardrobe-postgres:15-pgvector
+    build: ./docker/postgres
     container_name: wardrobe_postgres
     restart: unless-stopped
     environment:

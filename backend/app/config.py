@@ -196,6 +196,23 @@ class Settings(BaseSettings):
     # before failing with a quota error instead.
     ai_rate_limit_max_wait_seconds: int = Field(default=30, ge=0)
 
+    # CLIP image embeddings (pgvector item_embeddings), computed locally on the image worker.
+    # The ONNX model is downloaded once into <storage_path>/models and checked against
+    # embedding_model_sha256 before use.
+    embeddings_enabled: bool = Field(default=False)
+    embedding_model_name: str = Field(default="clip-vit-b32-int8")
+    embedding_model_url: str = Field(
+        default=(
+            "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/"
+            "d15189d7028b43f1d3e65039190477f6af591c2a/onnx/vision_model_quantized.onnx"
+        )
+    )
+    embedding_model_sha256: str = Field(
+        default="583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"
+    )
+    # Threads for one ONNX inference; kept low so embedding never starves the API on a small box.
+    embedding_threads: int = Field(default=2, ge=1)
+
     @property
     def effective_ai_vision_enabled(self) -> bool:
         """Whether internal vision (auto-tagging) is active.

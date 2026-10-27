@@ -1,9 +1,12 @@
 import logging
 
+from arq import cron
+
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.workers.background_removal import remove_item_background_job
 from app.workers.db import close_db, init_db
+from app.workers.embeddings import embed_pending_items_job
 from app.workers.queues import IMAGE_QUEUE
 from app.workers.rotation import rotate_item_image_job
 from app.workers.settings import get_redis_settings
@@ -35,6 +38,10 @@ class ImageWorkerSettings:
         rotate_item_image_job,
         remove_item_background_job,
     ]
+
+    # Fork: CLIP embeddings for new, re-cut or not yet embedded items (EMBEDDINGS_ENABLED).
+    # Cron only, so arq does not need it in `functions` and nothing enqueues it by name.
+    cron_jobs = [cron(embed_pending_items_job, minute=set(range(0, 60, 2)))]
 
     on_startup = startup
     on_shutdown = shutdown
