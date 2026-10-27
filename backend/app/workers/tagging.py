@@ -14,6 +14,7 @@ from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.ai_service import AIService, ClothingTags, repeats_identically
 from app.utils.locale import DEFAULT_LOCALE
+from app.workers.auto_background import queue_auto_background_removal
 from app.workers.db import get_db_session
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ def tags_to_item_fields(tags: ClothingTags, raw_response: str | None = None) -> 
         "style": tags.style,
         "formality": tags.formality,
         "season": tags.season,
+        "brand": tags.brand,
         "tags": tags_jsonb,  # Populate the tags JSONB field for frontend
         "ai_processed": True,
         "ai_confidence": tags.confidence,
@@ -337,6 +339,7 @@ async def tag_item_image(ctx: dict, item_id: str, image_path: str) -> dict[str, 
 
             await db.commit()
             logger.info(f"Updated item {item_id} with AI tags (status=ready)")
+            await queue_auto_background_removal(ctx, item_id)
 
             return {
                 "status": "success",

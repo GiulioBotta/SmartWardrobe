@@ -50,6 +50,7 @@ class ClothingTags(BaseModel):
     formality: str | None = None
     season: list[str] = []
     fit: str | None = None
+    brand: str | None = None
     confidence: float = 0.0
     logprobs_confidence: float | None = None
     description: str | None = None
@@ -124,6 +125,21 @@ VALID_STYLES = {
     "rugged",
 }
 VALID_SEASONS = {"spring", "summer", "fall", "winter", "all-season"}
+
+
+# Placeholder answers a model gives instead of the JSON null the prompt asks for.
+BRAND_PLACEHOLDERS = {"null", "none", "unknown", "n/a", "na", "-", "no brand", "unbranded"}
+
+
+def clean_brand(value: object) -> str | None:
+    """Brand as read off a logo or label, or None when the model saw none."""
+    if not isinstance(value, str):
+        return None
+    brand = " ".join(value.split())
+    if not brand or brand.lower() in BRAND_PLACEHOLDERS:
+        return None
+    # Fits ClothingItem.brand (String(100)).
+    return brand[:100]
 
 
 def compute_tag_completeness(tags: "ClothingTags") -> float:
@@ -437,6 +453,7 @@ class AIService:
         tags.style = validate_list(data.get("style", []), VALID_STYLES)
         tags.season = validate_list(data.get("season", []), VALID_SEASONS)
         tags.fit = validate_value(data.get("fit"), VALID_FIT)
+        tags.brand = clean_brand(data.get("brand"))
         tags.confidence = compute_tag_completeness(tags)
 
         logger.info(

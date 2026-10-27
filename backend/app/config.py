@@ -170,6 +170,10 @@ class Settings(BaseSettings):
     bg_removal_model: str = Field(default="u2net")  # rembg model name
     bg_removal_url: str | None = Field(default=None)  # URL for http provider (e.g. withoutbg)
     bg_removal_api_key: str | None = Field(default=None)  # API key for http provider
+    # Queue a background removal for every item once its AI tagging succeeds,
+    # instead of waiting for the user to ask for it from the toolbar.
+    auto_remove_background: bool = Field(default=False)
+    auto_remove_background_color: str = Field(default="#FFFFFF", pattern=r"^#[0-9A-Fa-f]{6}$")
 
     @property
     def effective_ai_vision_enabled(self) -> bool:
