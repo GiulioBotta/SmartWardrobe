@@ -1,0 +1,30 @@
+{
+  "nav": "Today",
+  "title": "What you're wearing today",
+  "subtitle": "Log what you have on in a moment: it counts for stats, washing and the next suggestions.",
+  "wearToday": "Wearing it today",
+  "wornLogged": "Logged as worn today",
+  "wornFailed": "Couldn't log it",
+  "loggedToday": "Already logged today",
+  "nothingYet": "Nothing yet for today.",
+  "getSuggestion": "Get an outfit suggestion",
+  "repeatTitle": "Wear a recent outfit again",
+  "repeat": "Wear it again today",
+  "pickTitle": "Pick the pieces",
+  "pickHint": "Tap what you have on, then choose the occasion and save.",
+  "noItems": "The wardrobe is empty: upload some items first.",
+  "selected": "{count, plural, one {# piece picked} other {# pieces picked}}",
+  "clear": "Clear the selection",
+  "save": "Save as worn today",
+  "slots": {
+    "tops": "Tops",
+    "bottoms": "Bottoms",
+    "outerwear": "Outerwear",
+    "shoes": "Shoes and socks",
+    "accessories": "Accessories"
+  },
+  "card": {
+    "question": "What are you wearing today?",
+    "hint": "Log it in two taps"
+  }
+}

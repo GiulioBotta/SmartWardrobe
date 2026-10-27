@@ -28,6 +28,7 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
+import { TodayLogCard } from '@/components/today/today-log-card';
 import Image from 'next/image';
 import { useAnalytics } from '@/lib/hooks/use-analytics';
 import { useAnalyticsInsightLines } from '@/lib/hooks/use-insight-text';
@@ -623,6 +624,9 @@ export default function DashboardPage() {
           {t('subtitle')}
         </p>
       </div>
+
+      {/* Fork: quick wear log */}
+      <TodayLogCard />
 
       {/* Top row - Weather + Pending + Next Scheduled */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

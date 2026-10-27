@@ -43,6 +43,7 @@ export const NAMESPACES = [
   // Fork: strings for the SmartWardrobe additions, kept out of the upstream namespaces.
   'smartSuggest',
   'batchInbox',
+  'quickLog',
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];

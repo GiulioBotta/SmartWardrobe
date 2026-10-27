@@ -1,0 +1,30 @@
+{
+  "nav": "Oggi",
+  "title": "Cosa indossi oggi",
+  "subtitle": "Registra in un attimo cosa hai addosso: conta per le statistiche, i lavaggi e le prossime proposte.",
+  "wearToday": "Lo metto oggi",
+  "wornLogged": "Registrato come indossato oggi",
+  "wornFailed": "Non sono riuscito a registrarlo",
+  "loggedToday": "Già registrato oggi",
+  "nothingYet": "Niente ancora per oggi.",
+  "getSuggestion": "Fatti proporre un outfit",
+  "repeatTitle": "Rimetti un outfit recente",
+  "repeat": "Rimettilo oggi",
+  "pickTitle": "Scegli i capi",
+  "pickHint": "Tocca quello che hai addosso, poi scegli l'occasione e salva.",
+  "noItems": "L'armadio è vuoto: carica prima qualche capo.",
+  "selected": "{count, plural, one {# capo scelto} other {# capi scelti}}",
+  "clear": "Annulla la scelta",
+  "save": "Salva come indossato oggi",
+  "slots": {
+    "tops": "Sopra",
+    "bottoms": "Sotto",
+    "outerwear": "Capispalla",
+    "shoes": "Scarpe e calze",
+    "accessories": "Accessori"
+  },
+  "card": {
+    "question": "Cosa indossi oggi?",
+    "hint": "Registralo in due tocchi"
+  }
+}

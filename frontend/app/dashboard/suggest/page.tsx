@@ -28,6 +28,7 @@ import {
   CalendarDays,
   CloudLightning,
   Layers,
+  CalendarCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -44,6 +45,11 @@ import { OutfitFilterPanel } from '@/components/suggest/outfit-filter-panel';
 import { PinnedItemsPicker } from '@/components/suggest/pinned-items-picker';
 import { SwapItemDialog } from '@/components/suggest/swap-item-dialog';
 import { useFeatures } from '@/lib/hooks/use-features';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { invalidateEveryItemWearCache } from '@/lib/hooks/cache-invalidation';
+import { queryKeys } from '@/lib/hooks/query-keys';
+import { wearSuggestionToday } from '@/lib/quick-log';
 import { EMPTY_FILTERS, OutfitFilters, toRequestFilters } from '@/lib/suggest-filters';
 import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { useItem } from '@/lib/hooks/use-items';
@@ -273,6 +279,7 @@ function OutfitCard({
   t,
   onAccept,
   onReject,
+  onWearToday,
   onSwapItem,
   showActions = true,
   badgeLabel,
@@ -283,12 +290,15 @@ function OutfitCard({
   t: Translator;
   onAccept?: () => void;
   onReject?: () => void;
+  // Fork: choose the look and log it as worn today in one tap.
+  onWearToday?: () => void;
   onSwapItem?: (item: OutfitItem) => void;
   showActions?: boolean;
   badgeLabel?: string;
 }) {
   const typeLabel = useTypeLabel();
   const tSwap = useTranslations('smartSuggest.swap');
+  const tLog = useTranslations('quickLog');
   return (
     <Card className="overflow-hidden flex flex-col h-full">
       <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4 border-b">
@@ -400,6 +410,12 @@ function OutfitCard({
                 <ThumbsDown className="h-4 w-4" />
               </Button>
             )}
+            {onWearToday && (
+              <Button size="sm" variant="outline" onClick={onWearToday} className="gap-1.5 text-xs h-8">
+                <CalendarCheck className="h-3.5 w-3.5" />
+                {tLog('wearToday')}
+              </Button>
+            )}
             {onAccept && (
               <Button size="sm" onClick={onAccept} className="gap-1.5 text-xs h-8">
                 <ThumbsUp className="h-3.5 w-3.5" />
@@ -424,6 +440,7 @@ function OutfitResultsView({
   onToggleCompareAll,
   onAccept,
   onReject,
+  onWearToday,
   onTryAnother,
   onNewRequest,
   onSwapItem,
@@ -439,6 +456,7 @@ function OutfitResultsView({
   onToggleCompareAll: () => void;
   onAccept: (outfit?: Outfit) => void;
   onReject: (outfit?: Outfit) => void;
+  onWearToday: (outfit: Outfit) => void;
   onTryAnother: () => void;
   onNewRequest: () => void;
   onSwapItem: (outfit: Outfit, item: OutfitItem) => void;
@@ -448,6 +466,7 @@ function OutfitResultsView({
   const conditionLabel = useWeatherConditionLabel();
   const occasionLabel = useOccasionLabel();
   const currentOutfit = outfits[activeOptionIndex] || outfits[0];
+  const tLog = useTranslations('quickLog');
 
   return (
     <div className="space-y-6">
@@ -537,6 +556,7 @@ function OutfitResultsView({
                 badgeLabel={t('options.optionNumber', { number: idx + 1 })}
                 onAccept={() => onAccept(opt)}
                 onReject={() => onReject(opt)}
+                onWearToday={() => onWearToday(opt)}
                 onSwapItem={(item) => onSwapItem(opt, item)}
                 showActions={true}
               />
@@ -565,7 +585,7 @@ function OutfitResultsView({
           />
 
           {/* Action buttons */}
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-wrap gap-3 justify-center">
             <Button variant="outline" size="lg" onClick={onTryAnother} className="gap-2">
               <RefreshCw className="h-4 w-4" />
               {outfits.length > 1 ? t('options.generateNew') : t('tryAnother')}
@@ -573,6 +593,10 @@ function OutfitResultsView({
             <Button size="lg" onClick={() => onAccept(currentOutfit)} className="gap-2">
               <ThumbsUp className="h-4 w-4" />
               {t('loveIt')}
+            </Button>
+            <Button variant="outline" size="lg" onClick={() => onWearToday(currentOutfit)} className="gap-2">
+              <CalendarCheck className="h-4 w-4" />
+              {tLog('wearToday')}
             </Button>
             <Button variant="ghost" size="lg" onClick={() => onReject(currentOutfit)} className="px-3" aria-label={t('dismissOutfit')}>
               <ThumbsDown className="h-4 w-4" />
@@ -596,6 +620,8 @@ async function discardAlternatives(outfits: Outfit[], keepId?: string) {
 
 function SuggestContent() {
   const t = useTranslations('suggest');
+  const tLog = useTranslations('quickLog');
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const preselectedItemId = searchParams.get('item');
   const { data: preselectedItem } = useItem(preselectedItemId || '');
@@ -689,6 +715,23 @@ function SuggestContent() {
       setSelectedOccasion(null);
     } catch (err) {
       console.error('Accept error:', err);
+    }
+  };
+
+  // Fork: accept and log as worn today, so the wear counts and history are right at once.
+  const handleWearToday = async (outfit: Outfit) => {
+    applySessionToken(session);
+    try {
+      await wearSuggestionToday(outfit.id);
+      await discardAlternatives(outfits, outfit.id);
+      setOutfits([]);
+      setSelectedOccasion(null);
+      toast.success(tLog('wornLogged'));
+      queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
+      invalidateEveryItemWearCache(queryClient);
+    } catch (err) {
+      console.error('Wear today error:', err);
+      toast.error(tLog('wornFailed'));
     }
   };
 
@@ -824,6 +867,7 @@ function SuggestContent() {
           baseItemIds={new Set(selectedItems.map((i) => i.id))}
           onAccept={handleAccept}
           onReject={handleReject}
+          onWearToday={handleWearToday}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}
           onSwapItem={(outfit, item) => setSwapTarget({ outfit, item })}

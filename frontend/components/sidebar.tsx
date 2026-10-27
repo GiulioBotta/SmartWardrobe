@@ -19,18 +19,22 @@ import {
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { useInboxNavItem } from '@/lib/hooks/use-batch-inbox';
+import { useTodayNavItem } from '@/lib/hooks/use-quick-log';
 
 export function Sidebar() {
   const pathname = usePathname();
   const t = useTranslations('nav');
   // Fork: the batch upload inbox, listed only while BATCH_UPLOAD_ENABLED is on.
   const inboxItem = useInboxNavItem();
+  // Fork: quick wear log.
+  const todayItem = useTodayNavItem();
 
   const navigation = [
     { name: t('dashboard'), href: '/dashboard', icon: Home },
     { name: t('wardrobe'), href: '/dashboard/wardrobe', icon: Shirt },
     ...(inboxItem ? [inboxItem] : []),
     { name: t('suggestOutfit'), href: '/dashboard/suggest', icon: Sparkles },
+    todayItem,
     { name: t('outfits'), href: '/dashboard/outfits', icon: LayoutGrid },
     { name: t('pairings'), href: '/dashboard/pairings', icon: Layers },
     { name: t('history'), href: '/dashboard/history', icon: History },
