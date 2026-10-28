@@ -75,6 +75,6 @@
     "feature3": "家族と共有",
     "feature3Desc": "一人ひとりが自分専用のワードローブを持てます",
     "getStarted": "始める",
-    "greeting": "Wardrowbeへようこそ{name}！"
+    "greeting": "{app}へようこそ{name}！"
   }
 }

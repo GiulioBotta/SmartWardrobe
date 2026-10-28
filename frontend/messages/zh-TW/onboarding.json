@@ -75,6 +75,6 @@
     "feature3": "與家人分享",
     "feature3Desc": "每個人都能擁有自己的個人化衣櫥",
     "getStarted": "開始使用",
-    "greeting": "歡迎來到 Wardrowbe{name}！"
+    "greeting": "歡迎來到 {app}{name}！"
   }
 }

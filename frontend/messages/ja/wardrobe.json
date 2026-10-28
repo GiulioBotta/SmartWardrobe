@@ -242,6 +242,7 @@
   "pageSize": "{count} 件/ページ",
   "search": "アイテムを検索...",
   "sort": {
+    "byCategory": "カテゴリ順",
     "leastRecentlyWorn": "最も久しく着ていない",
     "leastWorn": "着用回数が少ない",
     "mostWorn": "最も着用",

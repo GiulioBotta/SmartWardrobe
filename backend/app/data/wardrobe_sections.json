@@ -1,0 +1,17 @@
+{
+  "standard": [
+    {"key": "tops", "types": ["shirt", "t-shirt", "top", "polo", "blouse", "tank-top"]},
+    {"key": "knitwear", "types": ["sweater", "hoodie", "cardigan", "vest"]},
+    {"key": "outerwear", "types": ["jacket", "coat", "blazer"]},
+    {"key": "trousers", "types": ["pants", "jeans", "shorts"]},
+    {"key": "footwear", "types": ["shoes", "sneakers", "boots", "sandals"]},
+    {"key": "accessories", "types": ["hat", "scarf", "belt", "tie", "accessories"]}
+  ],
+  "hidden": [
+    {"key": "skirts", "types": ["skirt"], "fallback": "trousers"},
+    {"key": "dresses", "types": ["dress", "jumpsuit"], "fallback": "unsorted"},
+    {"key": "suits", "types": ["suit"], "fallback": "outerwear"},
+    {"key": "bags", "types": ["bag"], "fallback": "accessories"},
+    {"key": "hosiery", "types": ["socks", "tights"], "fallback": "accessories"}
+  ]
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, Heart, Grid3X3, Loader2, AlertCircle, RefreshCw, Droplets, ArrowUpDown, SlidersHorizontal, X } from 'lucide-react';
@@ -26,6 +26,18 @@ import {
 import { AddItemDialog } from '@/components/add-item-dialog';
 import { AnalysisQueuePanel } from '@/components/analysis-queue-panel';
 import { ItemDetailDialog } from '@/components/item-detail-dialog';
+import { FavoriteToggle } from '@/components/wardrobe/favorite-toggle';
+import { GroupedWardrobe, useGroupedView } from '@/components/wardrobe/grouped-wardrobe';
+import { WardrobeViewControls } from '@/components/wardrobe/wardrobe-view-controls';
+import { OrganizeSectionsDialog } from '@/components/wardrobe/organize-sections-dialog';
+import { NewCollectionDialog } from '@/components/wardrobe/new-collection-dialog';
+import { CollectionActions } from '@/components/wardrobe/collection-actions';
+import {
+  useAllItems,
+  useWardrobeSections,
+  useWardrobeSectionsEnabled,
+} from '@/lib/hooks/use-wardrobe-sections';
+import { collectionSelectionIds, groupItems } from '@/lib/wardrobe-sections';
 import { BulkActionToolbar, BulkSelection } from '@/components/bulk-action-toolbar';
 import { useItems, useItem, useItemTypes, useReanalyzeItem, useCancelAnalysis, useBulkDeleteItems, useBulkReanalyzeItems, useBulkCancelAnalysis, useBulkRotateItems, useBulkRemoveBackgroundItems, useRemoveBackground, useTaggingProgress, BulkOperationParams, tagProcessingLabel, formatAnalyzingElapsed, deriveQueueSummary } from '@/lib/hooks/use-items';
 import { useUserTimezone } from '@/lib/hooks/use-user';
@@ -48,11 +60,14 @@ const SORT_OPTIONS = [
   { value: 'wear_count', order: 'asc' as const },
   { value: 'name', order: 'asc' as const },
   { value: 'name', order: 'desc' as const },
+  // Fork: outerwear, tops, bottoms, shoes, accessories (backend item_category_order.py).
+  // Appended so the indices saved in ?sort= links keep pointing at the same option.
+  { value: 'category', order: 'asc' as const },
 ] as const;
 
 const SORT_LABEL_KEYS = [
   'newestFirst', 'oldestFirst', 'recentlyWorn', 'leastRecentlyWorn',
-  'mostWorn', 'leastWorn', 'nameAZ', 'nameZA',
+  'mostWorn', 'leastWorn', 'nameAZ', 'nameZA', 'byCategory',
 ] as const;
 
 function ItemCard({
@@ -131,11 +146,9 @@ function ItemCard({
             className="bg-background/80 backdrop-blur-sm"
           />
         </div>
-        {item.favorite && (
-          <div className="absolute top-2 right-2 z-10">
-            <Heart className="h-4 w-4 fill-red-500 text-red-500" />
-          </div>
-        )}
+        <div className="absolute top-2 right-2 z-10">
+          <FavoriteToggle item={item} />
+        </div>
         {item.needs_wash && (
           <div className="absolute bottom-2 right-2 z-10">
             <div className="bg-amber-500/90 text-white rounded-full p-1" title={t('needsWash')}>
@@ -246,7 +259,7 @@ function ItemCard({
       <CardContent className="px-1 pb-2 pt-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="font-serif text-[0.95rem] leading-snug truncate">
+            <p className="font-serif text-[0.95rem] leading-snug line-clamp-2 break-words">
               {item.name || typeLabel(item.type)}
             </p>
             <p className="label-caps truncate">
@@ -436,8 +449,26 @@ export default function WardrobePage() {
   const bulkRemoveBackground = useBulkRemoveBackgroundItems();
   const removeBackground = useRemoveBackground();
 
-  const items = data?.items || [];
-  const total = data?.total || 0;
+  // Fork: grouped wardrobe (WARDROBE_SECTIONS_ENABLED) loads every matching item so a group
+  // never splits across pages; the single grid keeps the original paging.
+  const sectionsEnabled = useWardrobeSectionsEnabled();
+  const [groupedView, setGroupedView] = useGroupedView();
+  const [organizeOpen, setOrganizeOpen] = useState(false);
+  // Items pre-ticked in the new-collection dialog; null when the dialog is closed.
+  const [newCollectionIds, setNewCollectionIds] = useState<string[] | null>(null);
+  const showGroups = sectionsEnabled && groupedView;
+  const allItems = useAllItems(filters, showGroups);
+  const { data: sections, isError: sectionsError } = useWardrobeSections(showGroups);
+  // A failed page or group list shows the error, never an emptier wardrobe.
+  const groupsError = showGroups && (sectionsError || allItems.isError);
+  const groups = useMemo(
+    () => (showGroups && sections ? groupItems(allItems.items, sections) : []),
+    [showGroups, sections, allItems.items],
+  );
+
+  const items = showGroups ? allItems.items : data?.items || [];
+  const total = showGroups ? allItems.total : data?.total || 0;
+  const collectionIds = collectionSelectionIds(selection, items, showGroups);
 
   // Get selected item: try from list first, then fetch individually (for deep-link from outfit pages)
   const listItem = detailItemId ? items.find((i) => i.id === detailItemId) || null : null;
@@ -657,6 +688,28 @@ export default function WardrobePage() {
     setPage(newPage);
   };
 
+  const renderCard = (item: Item) => {
+    // Determine if item is selected based on selection mode
+    const isSelected = selection.mode === 'all'
+      ? !selection.excludedIds.has(item.id)
+      : selection.selectedIds.has(item.id);
+    return (
+      <ItemCard
+        key={item.id}
+        item={item}
+        selected={isSelected}
+        onSelect={handleSelect}
+        onRetry={handleRetry}
+        onRetryBackgroundRemoval={handleRetryBackgroundRemoval}
+        onCancelAnalysis={handleCancelAnalysis}
+        onClick={() => setDetailItemId(item.id)}
+        onDismissError={handleDismissError}
+        errorDismissed={dismissedErrors.has(`${item.id}:${item.updated_at}`)}
+        userTimezone={userTimezone}
+      />
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -770,6 +823,13 @@ export default function WardrobePage() {
                 </span>
               )}
             </Button>
+            {sectionsEnabled && (
+              <WardrobeViewControls
+                grouped={groupedView}
+                onGroupedChange={setGroupedView}
+                onOrganize={() => setOrganizeOpen(true)}
+              />
+            )}
           </div>
         </div>
 
@@ -861,7 +921,7 @@ export default function WardrobePage() {
         )}
       </div>
 
-      {error ? (
+      {error || groupsError ? (
         <div className="text-center py-8">
           <p className="text-destructive">
             {t('errors.loadFailed')}
@@ -874,7 +934,7 @@ export default function WardrobePage() {
             {tc('retry')}
           </Button>
         </div>
-      ) : isLoading ? (
+      ) : isLoading || (showGroups && (allItems.isLoading || !sections)) ? (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
             <ItemCardSkeleton key={i} />
@@ -903,29 +963,11 @@ export default function WardrobePage() {
         ) : (
           <EmptyWardrobe onAddClick={() => setAddDialogOpen(true)} />
         )
+      ) : showGroups ? (
+        <GroupedWardrobe groups={groups} renderItem={(item) => renderCard(item)} />
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 pb-20 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {items.map((item) => {
-            // Determine if item is selected based on selection mode
-            const isSelected = selection.mode === 'all'
-              ? !selection.excludedIds.has(item.id)
-              : selection.selectedIds.has(item.id);
-            return (
-              <ItemCard
-                key={item.id}
-                item={item}
-                selected={isSelected}
-                onSelect={handleSelect}
-                onRetry={handleRetry}
-                onRetryBackgroundRemoval={handleRetryBackgroundRemoval}
-                onCancelAnalysis={handleCancelAnalysis}
-                onClick={() => setDetailItemId(item.id)}
-                onDismissError={handleDismissError}
-                errorDismissed={dismissedErrors.has(`${item.id}:${item.updated_at}`)}
-                userTimezone={userTimezone}
-              />
-            );
-          })}
+          {items.map((item) => renderCard(item))}
         </div>
       )}
 
@@ -945,8 +987,31 @@ export default function WardrobePage() {
         isRotating={bulkRotate.isPending}
         isRemovingBackground={bulkRemoveBackground.isPending}
         variant="items"
-        pagination={{ page, pageSize, onPageChange: handlePageChange }}
+        pagination={showGroups ? undefined : { page, pageSize, onPageChange: handlePageChange }}
+        extraActions={
+          sectionsEnabled && collectionIds ? (
+            <CollectionActions selectedIds={collectionIds} onNewCollection={setNewCollectionIds} />
+          ) : undefined
+        }
       />
+
+      {sectionsEnabled && (
+        <OrganizeSectionsDialog
+          open={organizeOpen}
+          onOpenChange={setOrganizeOpen}
+          onNewCollection={() => {
+            setOrganizeOpen(false);
+            setNewCollectionIds([]);
+          }}
+        />
+      )}
+      {sectionsEnabled && (
+        <NewCollectionDialog
+          open={newCollectionIds !== null}
+          onOpenChange={(open) => !open && setNewCollectionIds(null)}
+          initialItemIds={newCollectionIds ?? []}
+        />
+      )}
 
       <AddItemDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
       <AnalysisQueuePanel

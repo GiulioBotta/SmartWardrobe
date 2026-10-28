@@ -90,6 +90,9 @@ export function useItemPages(filters: ItemFilter, pageCount: number, pageSize = 
         hasMore: loaded[loaded.length - 1]?.data?.has_more ?? false,
         isLoading: results[0]?.isLoading ?? false,
         isFetching: results.some((result) => result.isFetching),
+        // Fork: lets the grouped wardrobe stop at a failed page instead of skipping past it.
+        isError: results.some((result) => result.isError),
+        loadedPages: loaded.length,
       };
     },
   });

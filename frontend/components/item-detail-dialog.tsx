@@ -61,7 +61,10 @@ import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWear, useLogWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
-import { CLOTHING_SUBTYPES, Item } from '@/lib/types';
+import { CLOTHING_SUBTYPES, Item, ItemTags } from '@/lib/types';
+import { ItemTagSelects } from '@/components/wardrobe/item-tag-selects';
+import { ItemCollectionsRow } from '@/components/wardrobe/item-collections-row';
+import { editableTagsFrom, tagChanges, type EditableTags } from '@/lib/garment-tags';
 import {
   useClothingTypes,
   useClothingColors,
@@ -101,6 +104,7 @@ interface EditForm {
   notes: string;
   favorite: boolean;
   wash_interval: number | undefined;
+  tags: EditableTags;
 }
 
 function editFormFromItem(item: Item): EditForm {
@@ -115,6 +119,7 @@ function editFormFromItem(item: Item): EditForm {
     notes: item.notes || '',
     favorite: item.favorite,
     wash_interval: item.wash_interval ?? undefined,
+    tags: editableTagsFrom(item.tags),
   };
 }
 
@@ -149,6 +154,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     notes: '',
     favorite: false,
     wash_interval: undefined,
+    tags: editableTagsFrom(null),
   });
   const [showWashHistory, setShowWashHistory] = useState(false);
   const [showWearHistory, setShowWearHistory] = useState(false);
@@ -196,6 +202,8 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           notes: editForm.notes || undefined,
           favorite: editForm.favorite,
           wash_interval: editForm.wash_interval,
+          // Partial on purpose: the backend merges tags, and null clears a key.
+          tags: tagChanges(item.tags, editForm.tags) as ItemTags | undefined,
         },
       });
       setIsEditing(false);
@@ -327,24 +335,28 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden [&>button]:hidden">
           {/* Header - sticky */}
-          <DialogHeader className="flex flex-row items-center gap-2 space-y-0 p-4 border-b flex-shrink-0">
-            {/* Below sm the title keeps its 45% cap and the actions stay in a
-                scrollable row, so the close control is always reachable on a
-                phone. From sm up the title becomes the flexible item and the
-                actions row is sized to its content instead, so every action
-                stays visible and the name truncates. Previously the title had
-                no cap at all from sm up: because a flex item claims its content
-                width before a flex-1 sibling does, a long name squeezed the
-                actions row and pushed edit and replace-image out of view. */}
-            <DialogTitle className="font-serif text-2xl font-normal min-w-0 truncate max-w-[45%] sm:max-w-none sm:flex-1">
-              {item.name || (typeInfo ? typeInfo.label : item.type)}
-            </DialogTitle>
+          <DialogHeader className="space-y-2 p-4 border-b flex-shrink-0">
+            {/* Fork: the name gets its own row (up to two lines) with the close control,
+                and the actions sit on the row below. Sharing one row with nine icons
+                left only a few truncated characters of the name visible. */}
+            <div className="flex items-start gap-2">
+              <DialogTitle className="font-serif text-2xl font-normal min-w-0 flex-1 line-clamp-2 break-words text-left">
+                {item.name || (typeInfo ? typeInfo.label : item.type)}
+              </DialogTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                className="rounded-full flex-shrink-0"
+                title={tc('close')}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
             {/* The action row scrolls sideways once it stops fitting, because
-                the dialog clips its own overflow: without this the buttons
-                push the close control past the right edge on a phone and it
-                cannot be reached at all. */}
-            <div className="flex-1 min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-none">
-              <div className="flex w-max ml-auto items-center gap-1">
+                the dialog clips its own overflow. */}
+            <div className="min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex w-max items-center gap-1 -ml-2">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -493,15 +505,6 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                 </Button>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="rounded-full flex-shrink-0"
-              title={tc('close')}
-            >
-              <X className="h-5 w-5" />
-            </Button>
           </DialogHeader>
 
           {/* Scrollable content */}
@@ -721,6 +724,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       />
                     </div>
                   </div>
+                  <ItemTagSelects
+                    value={editForm.tags}
+                    onChange={(tags) => setEditForm({ ...editForm, tags })}
+                  />
                   <div className="space-y-2">
                     <Label>{t('notes')}</Label>
                     <Textarea
@@ -811,6 +818,13 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       </div>
                     )}
                   </div>
+
+                  {/* Fork: collections the item is in (WARDROBE_SECTIONS_ENABLED). */}
+                  {features?.wardrobe_sections && (
+                    <div className="pt-2 border-t">
+                      <ItemCollectionsRow itemId={item.id} />
+                    </div>
+                  )}
 
                   {/* Wash Status */}
                   <div className="space-y-2 pt-2 border-t">

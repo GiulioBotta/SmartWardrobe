@@ -85,11 +85,32 @@ function renderPreferenceDefaults(defaults) {
   return ['export const PREFERENCE_DEFAULTS = {', ...entries, '} as const;'];
 }
 
+// Fork: wardrobe display categories (WARDROBE_SECTIONS_ENABLED).
+function renderWardrobeSections({ standard, hidden }) {
+  const types = [...standard, ...hidden]
+    .map(({ key: name, types: values }) => `  ${key(name)}: ${list(values)},`)
+    .join('\n');
+  const fallbacks = hidden.map(({ key: name, fallback }) => `  ${key(name)}: ${quote(fallback)},`).join('\n');
+  return [
+    `export const STANDARD_SECTION_KEYS = ${list(standard.map((s) => s.key))};`,
+    `export const HIDDEN_SECTION_KEYS = ${list(hidden.map((s) => s.key))};`,
+    '',
+    'export const SECTION_TYPES: Record<string, readonly string[]> = {',
+    types,
+    '};',
+    '',
+    'export const SECTION_FALLBACK: Record<string, string> = {',
+    fallbacks,
+    '};',
+  ];
+}
+
 const TARGETS = [
   { source: 'garment_vocabulary.json', output: 'garment-vocabulary.ts', render: renderVocabulary },
   { source: 'locales.json', output: 'locales.ts', render: renderLocales },
   { source: 'scales.json', output: 'scales.ts', render: renderScales },
   { source: 'preference_defaults.json', output: 'preference-defaults.ts', render: renderPreferenceDefaults },
+  { source: 'wardrobe_sections.json', output: 'wardrobe-sections.ts', render: renderWardrobeSections },
 ];
 
 const check = process.argv.includes('--check');

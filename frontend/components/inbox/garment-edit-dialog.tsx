@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { primaryPhoto, type Garment, type GarmentChanges, type GarmentTags } from '@/lib/batch-inbox';
+import { PATTERN_VALUES } from '@/lib/garment-tags';
 import { FORMALITY_VALUES, MATERIAL_VALUES } from '@/lib/generated/garment-vocabulary';
 import {
   useClothingColors,
@@ -26,11 +27,6 @@ import {
   usePatternLabel,
   useSeasonLabel,
 } from '@/lib/hooks/use-translated-constants';
-
-const PATTERN_VALUES = [
-  'solid', 'striped', 'checkered', 'plaid', 'floral', 'polka-dot',
-  'geometric', 'graphic', 'animal-print', 'camouflage',
-] as const;
 const SEASON_VALUES = ['spring', 'summer', 'fall', 'winter', 'all-season'] as const;
 // Select needs a non-empty value for "leave as it is" / "not set".
 const KEEP = '__keep';

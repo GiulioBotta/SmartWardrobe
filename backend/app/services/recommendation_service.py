@@ -42,6 +42,7 @@ from app.services.item_scorer import (
     temperature_band,
 )
 from app.services.outfit_filters import OutfitFilters, apply_filters, check_pinned_conflicts
+from app.services.outfit_language import outfit_language_instruction
 from app.services.outfit_validation import fit_and_recency, retry_note, validate_outfit_choice
 from app.services.suggestion_cache import pop_suggestion, push_suggestions
 from app.services.weather_service import (
@@ -1053,6 +1054,8 @@ class RecommendationService:
                 prompt,
                 flags=re.DOTALL,
             )
+        if language_line := outfit_language_instruction(user.locale):
+            prompt = f"{prompt.rstrip()}\n\n{language_line}"
 
         logger.info(
             f"Generating recommendation for user {user.id}, "

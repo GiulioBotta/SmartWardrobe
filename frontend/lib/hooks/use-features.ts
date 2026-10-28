@@ -15,6 +15,8 @@ interface Features {
   outfit_filters?: boolean;
   // Fork: batch upload review inbox (BATCH_UPLOAD_ENABLED).
   batch_upload?: boolean;
+  // Fork: wardrobe grouped by category, with collections (WARDROBE_SECTIONS_ENABLED).
+  wardrobe_sections?: boolean;
 }
 
 // An upload waits on this request before its first chunk, so a server that never answers

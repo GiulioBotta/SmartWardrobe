@@ -222,6 +222,10 @@ class Settings(BaseSettings):
     # A photo this similar to an item already in the wardrobe is flagged as its duplicate.
     batch_duplicate_threshold: float = Field(default=0.95, ge=0, le=1)
 
+    # The fork's grouped wardrobe (/wardrobe-sections): categories by type, hidden ones the
+    # user can switch on, and collections they fill by hand, all in one order they choose.
+    wardrobe_sections_enabled: bool = Field(default=False)
+
     @property
     def effective_ai_vision_enabled(self) -> bool:
         """Whether internal vision (auto-tagging) is active.

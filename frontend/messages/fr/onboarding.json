@@ -75,6 +75,6 @@
     "feature3": "Partagez avec votre famille",
     "feature3Desc": "Chacun peut avoir sa propre garde-robe personnalisée",
     "getStarted": "Commencer",
-    "greeting": "Bienvenue sur Wardrowbe{name} !"
+    "greeting": "Bienvenue sur {app}{name} !"
   }
 }

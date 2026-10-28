@@ -45,6 +45,7 @@ export const NAMESPACES = [
   'batchInbox',
   'quickLog',
   'wearly',
+  'wardrobeSections',
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];

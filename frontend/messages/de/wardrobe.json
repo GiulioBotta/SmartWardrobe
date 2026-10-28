@@ -242,6 +242,7 @@
   "pageSize": "{count} pro Seite",
   "search": "Stücke suchen...",
   "sort": {
+    "byCategory": "Nach Kategorie",
     "leastRecentlyWorn": "Am längsten nicht getragen",
     "leastWorn": "Am seltensten getragen",
     "mostWorn": "Am häufigsten getragen",

@@ -75,6 +75,6 @@
     "feature3": "가족과 공유하기",
     "feature3Desc": "모두가 각자의 맞춤 옷장을 가질 수 있어요",
     "getStarted": "시작하기",
-    "greeting": "Wardrowbe에 오신 것을 환영해요{name}!"
+    "greeting": "{app}에 오신 것을 환영해요{name}!"
   }
 }

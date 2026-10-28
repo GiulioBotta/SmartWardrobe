@@ -15,6 +15,7 @@ from app.models.item import (
     WashHistory,
 )
 from app.schemas.item import DEFAULT_WASH_INTERVALS, ItemCreate, ItemFilter, ItemUpdate
+from app.services.item_category_order import category_order_by
 
 
 class ItemService:
@@ -104,7 +105,9 @@ class ItemService:
             "type": ClothingItem.type,
         }
         sort_col = sort_columns.get(filters.sort_by or "", ClothingItem.created_at)
-        if filters.sort_order == "asc":
+        if filters.sort_by == "category":
+            query = query.order_by(*category_order_by(), ClothingItem.id.asc())
+        elif filters.sort_order == "asc":
             query = query.order_by(sort_col.asc().nulls_last(), ClothingItem.id.asc())
         else:
             query = query.order_by(sort_col.desc().nulls_last(), ClothingItem.id.asc())

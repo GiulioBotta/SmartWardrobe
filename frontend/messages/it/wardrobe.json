@@ -242,6 +242,7 @@
   "pageSize": "{count} per pagina",
   "search": "Cerca capi...",
   "sort": {
+    "byCategory": "Per categoria",
     "leastRecentlyWorn": "Meno recenti indossati",
     "leastWorn": "Meno indossati",
     "mostWorn": "Più indossati",

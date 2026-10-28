@@ -242,6 +242,7 @@
   "pageSize": "{count} per page",
   "search": "Search items...",
   "sort": {
+    "byCategory": "By category",
     "leastRecentlyWorn": "Least recently worn",
     "leastWorn": "Least worn",
     "mostWorn": "Most worn",

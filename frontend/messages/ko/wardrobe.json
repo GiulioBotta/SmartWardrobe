@@ -242,6 +242,7 @@
   "pageSize": "페이지당 {count}개",
   "search": "아이템 검색...",
   "sort": {
+    "byCategory": "카테고리순",
     "leastRecentlyWorn": "오래 안 입은 순",
     "leastWorn": "적게 입은 순",
     "mostWorn": "많이 입은 순",

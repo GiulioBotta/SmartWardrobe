@@ -38,6 +38,7 @@ import { useAuth } from '@/lib/hooks/use-auth';
 import { api } from '@/lib/api';
 import { LOCATION_NAME_MAX_LENGTH } from '@/lib/location';
 import { applySessionToken } from '@/lib/hooks/use-session-token';
+import { APP_NAME } from '@/lib/brand';
 import { StyleProfile } from '@/lib/types';
 import { useClothingColors, useClothingTypes } from '@/lib/hooks/use-translated-constants';
 import { useTranslations } from 'next-intl';
@@ -102,7 +103,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
       </div>
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
-          {t('welcome.greeting', { name: user?.display_name ? `, ${user.display_name.split(' ')[0]}` : '' })}
+          {t('welcome.greeting', { app: APP_NAME, name: user?.display_name ? `, ${user.display_name.split(' ')[0]}` : '' })}
         </h1>
         <p className="text-muted-foreground mt-2 text-lg">
           {t('welcome.description')}

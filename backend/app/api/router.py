@@ -17,6 +17,7 @@ from app.api.pairings import router as pairings_router
 from app.api.preferences import router as preferences_router
 from app.api.upload_batches import router as upload_batches_router
 from app.api.users import router as users_router
+from app.api.wardrobe_sections import router as wardrobe_sections_router
 from app.api.weather import router as weather_router
 
 api_router = APIRouter()
@@ -28,6 +29,8 @@ api_router.include_router(users_router)
 api_router.include_router(items_router)
 api_router.include_router(item_similarity_router)
 api_router.include_router(upload_batches_router)
+# Fork: grouped wardrobe (WARDROBE_SECTIONS_ENABLED).
+api_router.include_router(wardrobe_sections_router)
 api_router.include_router(images_router)
 api_router.include_router(preferences_router)
 api_router.include_router(families_router)

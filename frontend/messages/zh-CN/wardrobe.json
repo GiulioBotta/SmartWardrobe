@@ -242,6 +242,7 @@
   "pageSize": "每页 {count} 件",
   "search": "搜索单品...",
   "sort": {
+    "byCategory": "按类别",
     "leastRecentlyWorn": "最久未穿",
     "leastWorn": "穿着最少",
     "mostWorn": "穿着最多",

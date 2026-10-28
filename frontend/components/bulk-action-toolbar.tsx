@@ -14,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 
 export interface BulkSelection {
   mode: 'none' | 'some' | 'all';
@@ -40,6 +41,8 @@ interface BulkActionToolbarProps {
   isRemovingBackground?: boolean;
   variant?: BulkDeleteVariant;
   pagination?: BulkToolbarPagination;
+  // Fork: page-specific actions shown before Delete (the wardrobe's collection actions).
+  extraActions?: ReactNode;
 }
 
 export interface BulkToolbarPagination {
@@ -65,6 +68,7 @@ export function BulkActionToolbar({
   isRemovingBackground = false,
   variant = 'items',
   pagination,
+  extraActions,
 }: BulkActionToolbarProps) {
   const t = useTranslations('common');
   const tWardrobe = useTranslations('wardrobe');
@@ -241,6 +245,7 @@ export function BulkActionToolbar({
               </AlertDialogContent>
             </AlertDialog>
           )}
+          {extraActions}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="icon" className="h-8 w-8 shrink-0" disabled={isDeleting} aria-label={t('delete')}>

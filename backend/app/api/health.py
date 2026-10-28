@@ -70,6 +70,8 @@ async def feature_check() -> dict[str, Any]:
         "outfit_filters": get_settings().suggestion_combos_enabled,
         # Fork: batch upload review inbox (BATCH_UPLOAD_ENABLED).
         "batch_upload": get_settings().batch_upload_enabled,
+        # Fork: wardrobe grouped by category, with collections (WARDROBE_SECTIONS_ENABLED).
+        "wardrobe_sections": get_settings().wardrobe_sections_enabled,
     }
     try:
         get_provider()
